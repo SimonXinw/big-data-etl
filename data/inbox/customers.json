@@ -1,0 +1,6 @@
+[
+  {"customer_id": 1, "customer_name": "Alice", "city": "Shanghai", "customer_level": "gold"},
+  {"customer_id": 2, "customer_name": "Bob", "city": "Hangzhou", "customer_level": "silver"},
+  {"customer_id": 3, "customer_name": "Carol", "city": "Shenzhen", "customer_level": "gold"},
+  {"customer_id": 4, "customer_name": "David", "city": "Shanghai", "customer_level": "bronze"}
+]

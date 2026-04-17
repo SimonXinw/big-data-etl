@@ -1,0 +1,8 @@
+services:
+  metabase:
+    image: metabase/metabase:latest
+    container_name: etl-metabase
+    ports:
+      - "3000:3000"
+    environment:
+      MB_JETTY_PORT: 3000

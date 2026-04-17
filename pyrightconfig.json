@@ -1,0 +1,18 @@
+{
+  "include": [
+    "etl_project",
+    "lib",
+    "tests"
+  ],
+  "reportMissingImports": false,
+  "reportInvalidTypeForm": false,
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        ".",
+        "./etl_project"
+      ]
+    }
+  ]
+}
