@@ -71,21 +71,25 @@ class ShopifySyncTestCase(unittest.TestCase):
         "os.environ",
         {
             "SHOPIFY_STORE_DOMAIN": "demo-store.myshopify.com",
-            "SHOPIFY_ACCESS_TOKEN": "token",
+            "SHOPIFY_ADMIN_ACCESS_TOKEN": "admin-token",
+            "SHOPIFY_ACCESS_TOKEN": "",
             "SHOPIFY_API_VERSION": "2024-10",
+            "SHOPIFY_STOREFRONT_ACCESS_TOKEN": "sf-token",
         },
         clear=False,
     )
     def test_read_shopify_config_from_env_success(self) -> None:
         config = read_shopify_config_from_env()
         self.assertEqual(config.store_domain, "demo-store.myshopify.com")
-        self.assertEqual(config.access_token, "token")
+        self.assertEqual(config.access_token, "admin-token")
         self.assertEqual(config.api_version, "2024-10")
+        self.assertEqual(config.storefront_access_token, "sf-token")
 
     @patch.dict(
         "os.environ",
         {
             "SHOPIFY_STORE_DOMAIN": "",
+            "SHOPIFY_ADMIN_ACCESS_TOKEN": "",
             "SHOPIFY_ACCESS_TOKEN": "",
         },
         clear=False,
@@ -97,8 +101,34 @@ class ShopifySyncTestCase(unittest.TestCase):
     @patch.dict(
         "os.environ",
         {
+            "SHOPIFY_STORE_DOMAIN": "demo-store.myshopify.com",
+            "SHOPIFY_ADMIN_ACCESS_TOKEN": "",
+            "SHOPIFY_ACCESS_TOKEN": "legacy-only",
+        },
+        clear=False,
+    )
+    def test_read_shopify_config_legacy_access_token_only(self) -> None:
+        config = read_shopify_config_from_env()
+        self.assertEqual(config.access_token, "legacy-only")
+
+    @patch.dict(
+        "os.environ",
+        {
+            "SHOPIFY_STORE_DOMAIN": "demo-store.myshopify.com",
+            "SHOPIFY_ADMIN_ACCESS_TOKEN": "admin-wins",
+            "SHOPIFY_ACCESS_TOKEN": "legacy",
+        },
+        clear=False,
+    )
+    def test_read_shopify_config_admin_token_preferred_over_legacy(self) -> None:
+        config = read_shopify_config_from_env()
+        self.assertEqual(config.access_token, "admin-wins")
+
+    @patch.dict(
+        "os.environ",
+        {
             "SHOPIFY_STORE_DOMAIN": "not-a-shopify-domain.com",
-            "SHOPIFY_ACCESS_TOKEN": "token",
+            "SHOPIFY_ADMIN_ACCESS_TOKEN": "token",
         },
         clear=False,
     )

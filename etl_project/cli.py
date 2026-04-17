@@ -54,7 +54,8 @@ def main() -> None:
     """执行命令行 ETL。"""
 
     project_root = Path(__file__).resolve().parent.parent
-    load_dotenv(project_root / ".env")
+    # UTF-8 BOM 在 Windows 编辑器中常见；override=True 避免系统里空字符串占位导致 .env 不生效
+    load_dotenv(project_root / ".env", encoding="utf-8-sig", override=True)
 
     parser = build_parser()
     args = parser.parse_args()

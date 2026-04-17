@@ -183,13 +183,15 @@ JSON 推荐顶层为**数组**；也支持根对象内含 `customers` / `orders`
 
 Shopify 侧使用 **`lib/shopify` 封装的 Admin GraphQL**（自定义应用 Access Token，与 REST 共用 `X-Shopify-Access-Token`）。`etl_project/shopify_sync.py` 只负责把 GraphQL 结果映射成与示例 CSV 相同的列；**清洗与分层**仍在 DuckDB SQL（`load`/`transform`）；**报表**走导出 CSV 或 PostgreSQL + Metabase。
 
+**端到端说明（为何默认命令看不到 Shopify、拉数/清洗/BI 各是哪一步）**：见 `docs/shopify-and-bi-pipeline.md`。
+
 ### 1. 准备环境变量
 
 参考 `.env.example`，至少需要：
 
 ```env
 SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
-SHOPIFY_ACCESS_TOKEN=shpat_xxx
+SHOPIFY_ADMIN_ACCESS_TOKEN=shpat_xxx
 ```
 
 可选：
