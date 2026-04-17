@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="使用简单的增量模式加载订单数据。当前规则会按 order_id 追加新订单，避免重复插入。",
     )
+    parser.add_argument(
+        "--probe-storefront-products",
+        action="store_true",
+        help="仅调用 Storefront GraphQL 分页拉取全部商品（需 SHOPIFY_STOREFRONT_ACCESS_TOKEN），不跑 DuckDB ETL。",
+    )
     return parser
 
 
@@ -59,6 +64,11 @@ def main() -> None:
 
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.probe_storefront_products:
+        from etl_project.storefront_products_probe import run_probe
+
+        raise SystemExit(run_probe())
 
     result = run_pipeline(
         options=PipelineOptions(
