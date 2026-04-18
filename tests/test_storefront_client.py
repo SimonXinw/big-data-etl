@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lib.shopify.errors import ShopifyConfigError, ShopifyGraphQLError
-from lib.shopify.storefront_client import (
+from lib.shopify.storefront import (
     ShopifyStorefrontClient,
     ShopifyStorefrontConfig,
     read_storefront_config_from_env,
@@ -60,7 +60,7 @@ class StorefrontClientTestCase(unittest.TestCase):
             }
         }
 
-        with patch("lib.shopify.storefront_client.requests.post", return_value=mock_resp) as mock_post:
+        with patch("lib.shopify.storefront.requests.post", return_value=mock_resp) as mock_post:
             client = ShopifyStorefrontClient(cfg)
             data = client.execute("query { __typename }", {})
 
@@ -83,7 +83,7 @@ class StorefrontClientTestCase(unittest.TestCase):
         mock_resp.status_code = 401
         mock_resp.text = "unauthorized"
 
-        with patch("lib.shopify.storefront_client.requests.post", return_value=mock_resp):
+        with patch("lib.shopify.storefront.requests.post", return_value=mock_resp):
             client = ShopifyStorefrontClient(cfg)
             with self.assertRaises(ShopifyGraphQLError):
                 client.execute("query { __typename }", {})

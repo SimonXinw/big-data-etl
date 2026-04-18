@@ -28,6 +28,7 @@ class PipelineOptions:
     postgres_dsn: str = ""
     fail_on_quality_error: bool = True
     incremental_load: bool = False
+    shopify_sync_days: int | None = None
 
 
 @dataclass(frozen=True)
@@ -79,5 +80,6 @@ class PipelineResult:
     data_source: str = "csv"
     shopify_customer_rows: int | None = None
     shopify_order_rows: int | None = None
+    shopify_wide_orders_merged: int | None = None
     inbox_customer_rows: int | None = None
     inbox_order_rows: int | None = None

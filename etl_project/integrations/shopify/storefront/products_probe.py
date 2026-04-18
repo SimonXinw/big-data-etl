@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from lib.shopify.storefront_client import ShopifyStorefrontClient, read_storefront_config_from_env
+from lib.shopify.storefront import ShopifyStorefrontClient, read_storefront_config_from_env
 
 # Storefront 单次 `products` 连接最大 first 一般为 250
 _PAGE_SIZE = 250

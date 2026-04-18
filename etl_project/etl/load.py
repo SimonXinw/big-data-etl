@@ -18,7 +18,10 @@ from etl_project.config import ProjectPaths
 def ensure_directories(paths: ProjectPaths) -> None:
     """确保运行过程中需要的目录存在。"""
 
+    paths.raw_dir.mkdir(parents=True, exist_ok=True)
     paths.inbox_dir.mkdir(parents=True, exist_ok=True)
+    paths.products_dir.mkdir(parents=True, exist_ok=True)
+    paths.orders_dir.mkdir(parents=True, exist_ok=True)
     paths.output_dir.mkdir(parents=True, exist_ok=True)
     paths.warehouse_dir.mkdir(parents=True, exist_ok=True)
 
@@ -66,7 +69,14 @@ def _replace_raw_orders(connection: duckdb.DuckDBPyConnection, order_path: str) 
     connection.execute(
         f"""
         CREATE OR REPLACE TABLE raw_orders AS
-        SELECT *
+        SELECT
+            CAST(order_id AS BIGINT) AS order_id,
+            CAST(customer_id AS BIGINT) AS customer_id,
+            CAST(order_amount AS DOUBLE) AS order_amount,
+            CAST(order_date AS DATE) AS order_date,
+            'CNY' AS currency_code,
+            CAST('UNKNOWN' AS VARCHAR) AS ship_country,
+            CAST(0.0 AS DOUBLE) AS refund_amount
         FROM read_csv_auto('{order_path}', header = true, delim = ',')
         """
     )
@@ -86,7 +96,14 @@ def _append_incremental_orders(connection: duckdb.DuckDBPyConnection, order_path
     connection.execute(
         f"""
         CREATE OR REPLACE TEMP TABLE incoming_orders AS
-        SELECT *
+        SELECT
+            CAST(order_id AS BIGINT) AS order_id,
+            CAST(customer_id AS BIGINT) AS customer_id,
+            CAST(order_amount AS DOUBLE) AS order_amount,
+            CAST(order_date AS DATE) AS order_date,
+            'CNY' AS currency_code,
+            CAST('UNKNOWN' AS VARCHAR) AS ship_country,
+            CAST(0.0 AS DOUBLE) AS refund_amount
         FROM read_csv_auto('{order_path}', header = true, delim = ',')
         """
     )
@@ -149,7 +166,7 @@ def export_summary(connection: duckdb.DuckDBPyConnection, paths: ProjectPaths) -
         COPY (
             SELECT *
             FROM mart_sales_summary
-            ORDER BY order_month, city, customer_level
+            ORDER BY order_month, city, customer_level, currency_code
         )
         TO '{export_path}'
         WITH (HEADER, DELIMITER ',')

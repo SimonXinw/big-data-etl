@@ -1,4 +1,4 @@
-"""Shopify Admin GraphQL 通用执行客户端（只读 POST）。"""
+"""Shopify Admin GraphQL 通用客户端（只读 POST）。"""
 
 from __future__ import annotations
 
@@ -59,9 +59,19 @@ class ShopifyAdminClient:
         )
 
         if response.status_code >= 400:
-            raise ShopifyGraphQLError(
-                f"Shopify HTTP {response.status_code}: {response.text[:800]}"
-            )
+            snippet = response.text[:800]
+            hint = ""
+            if response.status_code == 401:
+                hint = (
+                    "（401：请核对 Admin Access Token 是否为当前店铺「自定义应用」生成的 shpat_ 令牌，"
+                    "且未过期；OAuth/CLI 应用请使用会话令牌而非混用店面 Token。）"
+                )
+            elif response.status_code == 403:
+                hint = (
+                    "（403：请在 Shopify 后台为该自定义应用勾选 read_orders / read_customers 等所需 Admin API scope，"
+                    "保存后可能需要重新安装应用以使 scope 生效。）"
+                )
+            raise ShopifyGraphQLError(f"Shopify HTTP {response.status_code}: {snippet}{hint}")
 
         payload = response.json()
         if not isinstance(payload, dict):

@@ -25,11 +25,13 @@
 - **数仓分层清晰**：`raw -> stg -> dw -> mart`
 - **内置数据质量校验**：跑完 ETL 后自动检查关键规则
 - **支持简单增量 ETL**：按 `order_id` 追加新订单
-- **可选 Shopify Admin GraphQL 拉数**：写入 `data/raw` 后走同一套分层 SQL
-- **可选本地 inbox 中转**：`data/inbox` 下 JSON/CSV 物化为 `data/raw` 再进 DuckDB
+- **可选 Shopify Admin 订单拉数**：按日 `updated_at` 宽表进 DuckDB / 可选 Supabase，与 **data/orders/** JSON 快照导出
+- **可选本地 inbox 中转**：`data/inbox` → 物化为 `data/raw` 再进 DuckDB
 - **BI 推荐明确**：默认推荐 Metabase
 
 ## 目录结构
+
+`data/` 下各子目录用途见 **`data/README.md`**（产品与订单 JSON、raw、导出物等约定）。
 
 ```text
 big-data-etl/
@@ -40,8 +42,11 @@ big-data-etl/
 │  └─ metabase/
 │     └─ docker-compose.yml        # Metabase 本地启动骨架
 ├─ data/
+│  ├─ README.md                    # data 子目录约定说明
 │  ├─ inbox/                       # 本地中转：json/csv → 物化为 raw
-│  ├─ raw/                         # 进入 DuckDB 的 CSV（可由 inbox/Shopify 生成）
+│  ├─ raw/                         # 进入 DuckDB 的 CSV
+│  ├─ products/                    # 店面商品等 JSON 导出（如 storefront_products.json）
+│  ├─ orders/                      # 订单宽表 JSON 快照（可选导出）
 │  ├─ output/                      # 导出的分析结果
 │  └─ warehouse/                   # DuckDB 数据文件
 ├─ docs/
@@ -55,14 +60,18 @@ big-data-etl/
 │  ├─ cli.py                       # 命令行参数解析
 │  ├─ config.py                    # 路径和环境配置
 │  ├─ models.py                    # 轻量数据模型
-│  ├─ extract.py                   # 抽取与输入校验
-│  ├─ data_inbox_sync.py           # data/inbox → data/raw CSV 物化
-│  ├─ shopify_sync.py              # 调用 lib.shopify 拉数并写成标准 raw CSV
-│  ├─ sync_chains.py               # 常用链路封装（inbox→DuckDB / inbox→Supabase 等）
-│  ├─ load.py                      # DuckDB 加载与导出
-│  ├─ transform.py                 # DuckDB SQL 转换逻辑
-│  ├─ postgres_loader.py           # 发布到 PostgreSQL / Supabase
-│  └─ pipeline.py                  # ETL 主编排
+│  ├─ etl/                         # **通用管线**（与具体厂商解耦）
+│  │   ├─ pipeline.py              # 主编排
+│  │   ├─ extract.py / load.py / transform.py
+│  │   ├─ quality.py / postgres_loader.py / sync_logging.py
+│  ├─ integrations/                # **业务接入**（厂商 / 本地格式）
+│  │   ├─ inbox/materialize.py    # data/inbox → data/raw CSV
+│  │   └─ shopify/
+│  │       ├─ admin/               # Admin：wide_sync、order_mapping、orders_bi
+│  │       ├─ storefront/          # Storefront：商品导出、探针
+│  │       ├─ compat.py           # 兼容测试用配置别名与标签映射
+│  │       └─ api_smoke.py        # Admin + Storefront 冒烟
+│  └─ sync_chains.py               # 常用链路封装（inbox→DuckDB / inbox→Supabase 等）
 ├─ sql/
 │  └─ postgres/
 │     └─ init_warehouse.sql        # PostgreSQL / Supabase 初始化脚本
@@ -81,7 +90,7 @@ big-data-etl/
 
 这个项目模拟一个简单电商业务：
 
-1. 从 CSV 读取客户和订单数据（或从 `data/inbox` 物化成 raw CSV，或从 Shopify 拉数写入 raw）
+1. 从 CSV 读取客户和订单数据（或从 `data/inbox` 物化成 raw CSV，或 **`--source shopify`** 由宽表衍生 narrow raw）
 2. 先加载到 DuckDB 的 raw 层
 3. 在 DuckDB 中完成清洗和建模
 4. 产出 stg / dw / mart 层
@@ -103,7 +112,7 @@ big-data-etl/
 - `customers.json` 或 `customers.csv`
 - `orders.json` 或 `orders.csv`
 
-JSON 推荐顶层为**数组**；也支持根对象内含 `customers` / `orders` / `data` 数组字段。列经 `data_inbox_sync.py` 规范为与 `data/raw` 示例相同的字段名后，再走统一 `transform.py`。
+JSON 推荐顶层为**数组**；也支持根对象内含 `customers` / `orders` / `data` 数组字段。列经 `integrations/inbox/materialize.py` 规范为与 `data/raw` 示例相同的字段名后，再走统一 `etl/transform.py`。
 
 仓库内已带一份与示例数据等价的 **`data/inbox/customers.json`**、**`orders.json`**，可直接跑 `--source inbox` 做联调。
 
@@ -179,11 +188,11 @@ JSON 推荐顶层为**数组**；也支持根对象内含 `customers` / `orders`
 - 给测试或调度层做结果判断
 - 帮助学习者理解“ETL 跑通”和“数据可信”是两回事
 
-## Shopify 后台数据接入（订单 / 客户 -> 同一套 ETL -> BI）
+## Shopify 后台数据接入（订单 -> 同一套 ETL -> BI）
 
-Shopify 侧使用 **`lib/shopify` 封装的 Admin GraphQL**（自定义应用 Access Token，与 REST 共用 `X-Shopify-Access-Token`）。`etl_project/shopify_sync.py` 只负责把 GraphQL 结果映射成与示例 CSV 相同的列；**清洗与分层**仍在 DuckDB SQL（`load`/`transform`）；**报表**走导出 CSV 或 PostgreSQL + Metabase。
+Shopify 侧使用 **`lib/shopify` 封装的 Admin GraphQL**（自定义应用 Access Token）。**主链路**为 `etl_project/integrations/shopify/admin/wide_sync.py`：按 **`--shopify-days` / `ETL_SHOPIFY_SYNC_DAYS`** 回溯若干 **UTC 自然日**，**每日单独**查询该日内 `updated_at` 窗口 → 订单宽表写入 DuckDB（可选 **PostgreSQL `raw.shopify_orders`** UPSERT、**`data/orders/`** JSON 快照）。随后由衍生的 `raw_orders` / `raw_customers` 进入 **`transform.py`**。
 
-**端到端说明（为何默认命令看不到 Shopify、拉数/清洗/BI 各是哪一步）**：见 `docs/shopify-and-bi-pipeline.md`。
+**端到端说明**：`docs/shopify-and-bi-pipeline.md`。
 
 ### 1. 准备环境变量
 
@@ -194,16 +203,18 @@ SHOPIFY_STORE_DOMAIN=your-store.myshopify.com
 SHOPIFY_ADMIN_ACCESS_TOKEN=shpat_xxx
 ```
 
-可选：
-
-```env
-SHOPIFY_API_VERSION=2024-10
-```
+可选：默认 Admin API 版本 **`2025-04`**（可用 `SHOPIFY_ADMIN_API_VERSION` / `SHOPIFY_API_VERSION` 覆盖）、回溯天数 **`ETL_SHOPIFY_SYNC_DAYS`（默认 14）**、订单 JSON 开关 **`ETL_SHOPIFY_JSON_SNAPSHOT_ENABLE`**（默认开启，写入固定路径 `data/orders/shopify_orders_snapshot.json`）、**`ETL_POSTGRES_DSN`**。
 
 ### 2. 运行 ETL（Shopify 数据源）
 
 ```bash
 python -m etl_project --source shopify --target duckdb
+```
+
+可选：仅验证 Admin / Storefront 通路（不跑 ETL）：
+
+```bash
+python -m etl_project --smoke-shopify-apis
 ```
 
 若要把结果推到 PostgreSQL / Supabase 给 Metabase 使用：
@@ -214,10 +225,9 @@ python -m etl_project --source shopify --target postgres
 
 说明：
 
-- `customer_level` 会尽量从 Shopify `tags` 里做粗映射（例如包含 `vip` / `gold` 等关键字）；否则取第一个 tag，再否则为 `standard`
-- 游客订单会生成合成 `customer_id`，并在 customers CSV 中补齐对应行
-- GraphQL 使用 `legacyResourceId` 作为订单/客户主键写入 raw，DuckDB 与 PostgreSQL 侧按 **bigint** 处理
-- 若要在订单或客户上增加分析字段，在 `lib/shopify/queries/*.py` 中按现有格式扩展 selection，再在 `shopify_sync.py` 中映射到 CSV 列（必要时同步扩展 `transform.py` 与 `init_warehouse.sql`）
+- 衍生 narrow 层里 `customer_level` 当前为占位 **`standard`**（与宽表学习路径一致）；若需按 tags 映射可扩展 `integrations/shopify/admin/order_mapping` / 衍生 SQL
+- 游客订单使用与简版同步一致的合成 `customer_legacy_id` 规则
+- 新增业务字段：GraphQL 见 **`lib/shopify/queries/orders.py`**（宽表模板 `ORDERS_BY_UPDATED_DAY_TEMPLATE`），单日组装逻辑见 **`etl_project/integrations/shopify/admin/orders_bi.py`**；映射改 **`integrations/shopify/admin/order_mapping.py`**；必要时同步 **`sql/postgres/init_warehouse.sql`** 中 `raw.shopify_orders`
 
 ### 3. 看 BI 报表
 
@@ -403,17 +413,17 @@ Python ETL -> PostgreSQL / Supabase -> Metabase
 
 建议按这个顺序看代码：
 
-1. `etl_project/pipeline.py`
+1. `etl_project/etl/pipeline.py`
 2. `etl_project/cli.py`
 3. `etl_project/config.py`
-4. `etl_project/extract.py`
-5. `etl_project/data_inbox_sync.py`
-6. `etl_project/shopify_sync.py`
+4. `etl_project/etl/extract.py`
+5. `etl_project/integrations/inbox/materialize.py`
+6. `etl_project/integrations/shopify/compat.py`
 7. `etl_project/sync_chains.py`
-8. `etl_project/load.py`
-9. `etl_project/transform.py`
-10. `etl_project/postgres_loader.py`
-11. `etl_project/quality.py`
+8. `etl_project/etl/load.py`
+9. `etl_project/etl/transform.py`
+10. `etl_project/etl/postgres_loader.py`
+11. `etl_project/etl/quality.py`
 12. `tests/test_pipeline.py`
 13. `tests/test_inbox_sync.py`
 14. `tests/test_shopify_sync.py`

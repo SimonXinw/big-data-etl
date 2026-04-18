@@ -35,7 +35,11 @@ def read_shopify_admin_config_from_env() -> ShopifyAdminConfig:
 
     store_domain = os.getenv("SHOPIFY_STORE_DOMAIN", "").strip()
     access_token = _admin_access_token_from_env()
-    api_version = os.getenv("SHOPIFY_API_VERSION", "2025-10").strip() or "2025-10"
+    api_version = (
+        os.getenv("SHOPIFY_ADMIN_API_VERSION", "").strip()
+        or os.getenv("SHOPIFY_API_VERSION", "2025-04").strip()
+        or "2025-04"
+    )
     storefront = os.getenv("SHOPIFY_STOREFRONT_ACCESS_TOKEN", "").strip() or None
 
     if not store_domain or not access_token:

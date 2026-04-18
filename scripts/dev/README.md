@@ -11,10 +11,12 @@
 | `install_deps_dev.ps1` | `pip install -r requirements.txt` |
 | `run_etl_csv_dev.ps1` | 默认：`data/raw` CSV → DuckDB → `data/output` |
 | `run_etl_inbox_dev.ps1` | `data/inbox` 物化 raw → DuckDB → `data/output` |
+| （手动）Storefront 商品 JSON | `python -m etl_project --export-storefront-products-json` → `data/products/storefront_products.json` |
 | `run_etl_shopify_dev.ps1` | Shopify 拉数 → raw → DuckDB（需 `.env` 里 Shopify 变量） |
 | `run_publish_postgres_dev.ps1` | ETL 并发布到 Postgres；可选参数 `-Source inbox` / `shopify` |
 | `run_metabase_dev.ps1` | `bi/metabase` 下 `docker compose up -d` |
-| `run_local_duckdb_demo_dev.ps1` | 安装依赖 + 跑一遍默认 CSV→DuckDB（最短演示） |
+
+最短演示（装依赖 + 默认 CSV→DuckDB）：先 `install_deps_dev.ps1`，再 `run_etl_csv_dev.ps1`。
 
 ## 使用示例
 

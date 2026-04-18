@@ -52,8 +52,19 @@ PUBLISH_PLANS = (
     ),
     PublishPlan(
         target_table="raw.orders_raw",
-        select_sql="SELECT order_id, customer_id, order_amount, order_date FROM raw_orders ORDER BY order_id",
-        columns=("order_id", "customer_id", "order_amount", "order_date"),
+        select_sql=(
+            "SELECT order_id, customer_id, order_amount, order_date, currency_code, ship_country, refund_amount "
+            "FROM raw_orders ORDER BY order_id"
+        ),
+        columns=(
+            "order_id",
+            "customer_id",
+            "order_amount",
+            "order_date",
+            "currency_code",
+            "ship_country",
+            "refund_amount",
+        ),
     ),
     PublishPlan(
         target_table="stg.customers_clean",
@@ -62,8 +73,21 @@ PUBLISH_PLANS = (
     ),
     PublishPlan(
         target_table="stg.orders_clean",
-        select_sql="SELECT order_id, customer_id, order_amount, order_date, order_month FROM stg_orders ORDER BY order_id",
-        columns=("order_id", "customer_id", "order_amount", "order_date", "order_month"),
+        select_sql=(
+            "SELECT order_id, customer_id, order_amount, order_date, order_month, currency_code, ship_country, "
+            "refund_amount, net_amount FROM stg_orders ORDER BY order_id"
+        ),
+        columns=(
+            "order_id",
+            "customer_id",
+            "order_amount",
+            "order_date",
+            "order_month",
+            "currency_code",
+            "ship_country",
+            "refund_amount",
+            "net_amount",
+        ),
     ),
     PublishPlan(
         target_table="dw.dim_customers",
@@ -72,56 +96,93 @@ PUBLISH_PLANS = (
     ),
     PublishPlan(
         target_table="dw.fact_orders",
-        select_sql="SELECT order_id, customer_id, order_amount, order_date, order_month FROM fact_orders ORDER BY order_id",
-        columns=("order_id", "customer_id", "order_amount", "order_date", "order_month"),
+        select_sql=(
+            "SELECT order_id, customer_id, order_amount, order_date, order_month, currency_code, ship_country, "
+            "refund_amount, net_amount FROM fact_orders ORDER BY order_id"
+        ),
+        columns=(
+            "order_id",
+            "customer_id",
+            "order_amount",
+            "order_date",
+            "order_month",
+            "currency_code",
+            "ship_country",
+            "refund_amount",
+            "net_amount",
+        ),
     ),
     PublishPlan(
         target_table="mart.sales_summary",
-        select_sql="SELECT summary_key, city, customer_level, order_month, order_count, total_sales, avg_order_amount FROM mart_sales_summary ORDER BY summary_key",
-        columns=("summary_key", "city", "customer_level", "order_month", "order_count", "total_sales", "avg_order_amount"),
+        select_sql=(
+            "SELECT summary_key, city, customer_level, order_month, currency_code, order_count, gross_sales, "
+            "total_refunds, net_sales, avg_order_amount FROM mart_sales_summary ORDER BY summary_key"
+        ),
+        columns=(
+            "summary_key",
+            "city",
+            "customer_level",
+            "order_month",
+            "currency_code",
+            "order_count",
+            "gross_sales",
+            "total_refunds",
+            "net_sales",
+            "avg_order_amount",
+        ),
     ),
     PublishPlan(
         target_table="mart.daily_sales",
         select_sql=(
-            "SELECT order_date, order_month, order_count, customer_count, gross_merchandise_value, "
-            "average_order_value FROM mart_daily_sales ORDER BY order_date"
+            "SELECT order_date, order_month, currency_code, order_count, customer_count, gross_merchandise_value, "
+            "total_refunds, net_sales, average_order_value FROM mart_daily_sales ORDER BY order_date, currency_code"
         ),
         columns=(
             "order_date",
             "order_month",
+            "currency_code",
             "order_count",
             "customer_count",
             "gross_merchandise_value",
+            "total_refunds",
+            "net_sales",
             "average_order_value",
         ),
     ),
     PublishPlan(
         target_table="mart.city_sales",
         select_sql=(
-            "SELECT city, order_month, order_count, customer_count, gross_merchandise_value, "
-            "average_order_value FROM mart_city_sales ORDER BY city, order_month"
+            "SELECT city, order_month, currency_code, order_count, customer_count, gross_merchandise_value, "
+            "total_refunds, net_sales, average_order_value FROM mart_city_sales ORDER BY city, order_month, currency_code"
         ),
         columns=(
             "city",
             "order_month",
+            "currency_code",
             "order_count",
             "customer_count",
             "gross_merchandise_value",
+            "total_refunds",
+            "net_sales",
             "average_order_value",
         ),
     ),
     PublishPlan(
         target_table="mart.customer_level_sales",
         select_sql=(
-            "SELECT customer_level, order_month, order_count, customer_count, gross_merchandise_value, "
-            "average_order_value FROM mart_customer_level_sales ORDER BY customer_level, order_month"
+            "SELECT customer_level, order_month, currency_code, order_count, customer_count, gross_merchandise_value, "
+            "total_refunds, net_sales, average_order_value FROM mart_customer_level_sales ORDER BY "
+            "customer_level, order_month, currency_code"
         ),
         columns=(
             "customer_level",
             "order_month",
+            "currency_code",
             "order_count",
             "customer_count",
             "gross_merchandise_value",
+            "total_refunds",
+            "net_sales",
             "average_order_value",
         ),
     ),

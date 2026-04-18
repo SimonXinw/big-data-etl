@@ -12,9 +12,11 @@ from pathlib import Path
 build_paths = import_module("etl_project.config").build_paths
 ProjectPaths = import_module("etl_project.config").ProjectPaths
 PipelineOptions = import_module("etl_project.models").PipelineOptions
-InboxSourceError = import_module("etl_project.data_inbox_sync").InboxSourceError
-materialize_raw_from_inbox = import_module("etl_project.data_inbox_sync").materialize_raw_from_inbox
-run_pipeline = import_module("etl_project.pipeline").run_pipeline
+InboxSourceError = import_module("etl_project.integrations.inbox.materialize").InboxSourceError
+materialize_raw_from_inbox = import_module(
+    "etl_project.integrations.inbox.materialize"
+).materialize_raw_from_inbox
+run_pipeline = import_module("etl_project.etl.pipeline").run_pipeline
 
 
 class InboxSyncTestCase(unittest.TestCase):
@@ -66,10 +68,17 @@ class InboxSyncTestCase(unittest.TestCase):
             encoding="utf-8",
         )
 
+        data_dir = root_dir / "data"
+        products_dir = data_dir / "products"
+        orders_dir = data_dir / "orders"
+
         return ProjectPaths(
             root_dir=root_dir,
+            data_dir=data_dir,
             raw_dir=raw_dir,
             inbox_dir=inbox_dir,
+            products_dir=products_dir,
+            orders_dir=orders_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -77,6 +86,7 @@ class InboxSyncTestCase(unittest.TestCase):
             bi_dir=bi_dir,
             customers_file=raw_dir / "customers.csv",
             orders_file=raw_dir / "orders.csv",
+            storefront_products_json_file=products_dir / "storefront_products.json",
             database_file=warehouse_dir / "etl_learning.duckdb",
             export_file=output_dir / "sales_summary.csv",
             quality_report_file=output_dir / "quality_report.json",
@@ -123,10 +133,17 @@ class InboxSyncTestCase(unittest.TestCase):
         bi_dir.mkdir(parents=True, exist_ok=True)
         (sql_dir / "postgres").mkdir(parents=True, exist_ok=True)
 
+        data_dir = root_dir / "data"
+        products_dir = data_dir / "products"
+        orders_dir = data_dir / "orders"
+
         paths = ProjectPaths(
             root_dir=root_dir,
+            data_dir=data_dir,
             raw_dir=raw_dir,
             inbox_dir=inbox_dir,
+            products_dir=products_dir,
+            orders_dir=orders_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -134,6 +151,7 @@ class InboxSyncTestCase(unittest.TestCase):
             bi_dir=bi_dir,
             customers_file=raw_dir / "customers.csv",
             orders_file=raw_dir / "orders.csv",
+            storefront_products_json_file=products_dir / "storefront_products.json",
             database_file=warehouse_dir / "etl_learning.duckdb",
             export_file=output_dir / "sales_summary.csv",
             quality_report_file=output_dir / "quality_report.json",

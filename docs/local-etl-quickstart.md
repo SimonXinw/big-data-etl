@@ -12,6 +12,7 @@
 | **本地整套要跑哪些步骤 / 文件** | `docs/local-full-runbook.md` |
 | **Windows 下一键 `*_dev` 脚本** | `scripts/dev/README.md` |
 | 模块职责 | `docs/project-structure.md` |
+| **`data/` 目录约定**（raw / products / orders 等） | `data/README.md` |
 | BI 与 Metabase | `docs/bi-guide.md`、`docs/metabase-dashboard-template.md` |
 
 ## 环境要求

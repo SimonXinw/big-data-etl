@@ -1,9 +1,9 @@
 .env
+logs/
 __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
 node_modules/
-data/warehouse/*.duckdb
-data/output/*.csv
-data/output/*.json
+# data/ 运行产物与本地导出（需提交示例时可 git add -f 或收窄规则）
+data/*

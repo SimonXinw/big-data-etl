@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from etl_project.config import ProjectPaths, build_paths, read_postgres_dsn
 from etl_project.models import PipelineOptions, PipelineResult
-from etl_project.pipeline import run_pipeline
+from etl_project.etl.pipeline import run_pipeline
 
 
 def run_inbox_to_duckdb(

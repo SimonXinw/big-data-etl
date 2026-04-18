@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 import unittest
@@ -13,10 +14,12 @@ build_paths = import_module("etl_project.config").build_paths
 ShopifyAdminConfig = import_module("lib.shopify.config").ShopifyAdminConfig
 ProjectPaths = import_module("etl_project.config").ProjectPaths
 ShopifyConfigError = import_module("lib.shopify.errors").ShopifyConfigError
-ShopifySyncSummary = import_module("etl_project.shopify_sync").ShopifySyncSummary
-read_shopify_config_from_env = import_module("etl_project.shopify_sync").read_shopify_config_from_env
-_normalize_customer_level = import_module("etl_project.shopify_sync")._normalize_customer_level
-sync_shopify_to_csv = import_module("etl_project.shopify_sync").sync_shopify_to_csv
+ShopifyWideSyncSummary = import_module(
+    "etl_project.integrations.shopify.admin.wide_sync"
+).ShopifyWideSyncSummary
+read_shopify_config_from_env = import_module("etl_project.integrations.shopify.compat").read_shopify_config_from_env
+_normalize_customer_level = import_module("etl_project.integrations.shopify.compat")._normalize_customer_level
+read_shopify_admin_config_from_env = import_module("lib.shopify.config").read_shopify_admin_config_from_env
 
 
 class ShopifySyncTestCase(unittest.TestCase):
@@ -44,10 +47,17 @@ class ShopifySyncTestCase(unittest.TestCase):
         bi_dir.mkdir(parents=True, exist_ok=True)
         (sql_dir / "postgres").mkdir(parents=True, exist_ok=True)
 
+        data_dir = root_dir / "data"
+        products_dir = data_dir / "products"
+        orders_dir = data_dir / "orders"
+
         return ProjectPaths(
             root_dir=root_dir,
+            data_dir=data_dir,
             raw_dir=raw_dir,
             inbox_dir=inbox_dir,
+            products_dir=products_dir,
+            orders_dir=orders_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -55,6 +65,7 @@ class ShopifySyncTestCase(unittest.TestCase):
             bi_dir=bi_dir,
             customers_file=raw_dir / "customers.csv",
             orders_file=raw_dir / "orders.csv",
+            storefront_products_json_file=products_dir / "storefront_products.json",
             database_file=warehouse_dir / "etl_learning.duckdb",
             export_file=output_dir / "sales_summary.csv",
             quality_report_file=output_dir / "quality_report.json",
@@ -136,48 +147,28 @@ class ShopifySyncTestCase(unittest.TestCase):
         with self.assertRaises(ShopifyConfigError):
             read_shopify_config_from_env()
 
-    @patch("etl_project.shopify_sync.read_shopify_admin_config_from_env")
-    @patch("etl_project.shopify_sync._collect_customers_and_orders")
-    def test_sync_shopify_to_csv_writes_expected_files(self, mock_collect, mock_read_config) -> None:
-        mock_read_config.return_value = ShopifyAdminConfig(
-            store_domain="demo.myshopify.com",
-            access_token="token",
-            api_version="2024-10",
+    def test_default_shopify_admin_api_version_is_2025_04(self) -> None:
+        env_keys = (
+            "SHOPIFY_STORE_DOMAIN",
+            "SHOPIFY_ADMIN_ACCESS_TOKEN",
+            "SHOPIFY_ADMIN_API_VERSION",
+            "SHOPIFY_API_VERSION",
         )
-        mock_collect.return_value = (
-            [
-                {
-                    "customer_id": 7001,
-                    "customer_name": "Test User",
-                    "city": "Shanghai",
-                    "customer_level": "gold",
-                }
-            ],
-            [
-                {
-                    "order_id": 8001,
-                    "customer_id": 7001,
-                    "order_amount": 12.34,
-                    "order_date": "2026-04-01",
-                }
-            ],
-        )
+        saved = {key: os.environ.get(key) for key in env_keys}
 
-        paths = self._build_temp_paths()
-        summary = sync_shopify_to_csv(paths)
-
-        self.assertEqual(summary, ShopifySyncSummary(customer_rows=1, order_rows=1))
-        self.assertTrue(paths.customers_file.exists())
-        self.assertTrue(paths.orders_file.exists())
-
-        customers_text = paths.customers_file.read_text(encoding="utf-8").strip().splitlines()
-        orders_text = paths.orders_file.read_text(encoding="utf-8").strip().splitlines()
-
-        self.assertEqual(customers_text[0], "customer_id,customer_name,city,customer_level")
-        self.assertEqual(customers_text[1], "7001,Test User,Shanghai,gold")
-        self.assertEqual(orders_text[0], "order_id,customer_id,order_amount,order_date")
-        self.assertEqual(orders_text[1], "8001,7001,12.34,2026-04-01")
-
+        try:
+            os.environ.pop("SHOPIFY_ADMIN_API_VERSION", None)
+            os.environ.pop("SHOPIFY_API_VERSION", None)
+            os.environ["SHOPIFY_STORE_DOMAIN"] = "demo-store.myshopify.com"
+            os.environ["SHOPIFY_ADMIN_ACCESS_TOKEN"] = "token-for-default-version-test"
+            cfg = read_shopify_admin_config_from_env()
+            self.assertEqual(cfg.api_version, "2025-04")
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 class ShopifyPipelineIntegrationTestCase(unittest.TestCase):
     """验证编排层在 shopify 数据源下能跑通主链路。"""
@@ -207,10 +198,17 @@ class ShopifyPipelineIntegrationTestCase(unittest.TestCase):
         source_paths = build_paths()
         shutil.copy2(source_paths.postgres_init_file, sql_dir / "postgres" / "init_warehouse.sql")
 
+        data_dir = root_dir / "data"
+        products_dir = data_dir / "products"
+        orders_dir = data_dir / "orders"
+
         return ProjectPaths(
             root_dir=root_dir,
+            data_dir=data_dir,
             raw_dir=raw_dir,
             inbox_dir=inbox_dir,
+            products_dir=products_dir,
+            orders_dir=orders_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -218,6 +216,7 @@ class ShopifyPipelineIntegrationTestCase(unittest.TestCase):
             bi_dir=bi_dir,
             customers_file=raw_dir / "customers.csv",
             orders_file=raw_dir / "orders.csv",
+            storefront_products_json_file=products_dir / "storefront_products.json",
             database_file=warehouse_dir / "etl_learning.duckdb",
             export_file=output_dir / "sales_summary.csv",
             quality_report_file=output_dir / "quality_report.json",
@@ -226,23 +225,33 @@ class ShopifyPipelineIntegrationTestCase(unittest.TestCase):
 
     def test_pipeline_runs_with_shopify_source_when_sync_writes_csv(self) -> None:
         PipelineOptions = import_module("etl_project.models").PipelineOptions
-        run_pipeline = import_module("etl_project.pipeline").run_pipeline
-        ShopifySyncSummary = import_module("etl_project.shopify_sync").ShopifySyncSummary
+        run_pipeline = import_module("etl_project.etl.pipeline").run_pipeline
+        load_raw_tables = import_module("etl_project.etl.load").load_raw_tables
 
         paths = self._build_temp_paths()
         sample_paths = build_paths()
 
-        def fake_sync(target_paths: ProjectPaths) -> ShopifySyncSummary:
+        def fake_wide_sync(connection, target_paths: ProjectPaths, options: object) -> ShopifyWideSyncSummary:
             shutil.copy2(sample_paths.customers_file, target_paths.customers_file)
             shutil.copy2(sample_paths.orders_file, target_paths.orders_file)
-            return ShopifySyncSummary(customer_rows=4, order_rows=6)
+            load_raw_tables(connection, target_paths, incremental_load=False)
 
-        with patch("etl_project.pipeline.sync_shopify_to_csv", side_effect=fake_sync):
+            return ShopifyWideSyncSummary(
+                days_requested=14,
+                shop_label="demo",
+                orders_merged=6,
+                duckdb_rows_touched=6,
+                postgres_rows_touched=0,
+            )
+
+        with patch("etl_project.etl.pipeline.sync_shopify_orders_incremental", side_effect=fake_wide_sync):
             result = run_pipeline(paths, PipelineOptions(target="duckdb", data_source="shopify"))
 
         self.assertEqual(result.data_source, "shopify")
         self.assertEqual(result.shopify_customer_rows, 4)
         self.assertEqual(result.shopify_order_rows, 6)
+        self.assertEqual(result.shopify_wide_orders_merged, 6)
+        self.assertEqual(result.loaded_sources, ["shopify_orders_wide"])
         self.assertTrue(paths.database_file.exists())
         self.assertTrue(result.quality_report is not None and result.quality_report.is_successful)
 

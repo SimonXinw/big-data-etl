@@ -1,8 +1,0 @@
-[
-  {"order_id": 1001, "customer_id": 1, "order_amount": 1200.5, "order_date": "2026-04-01"},
-  {"order_id": 1002, "customer_id": 2, "order_amount": 260.0, "order_date": "2026-04-01"},
-  {"order_id": 1003, "customer_id": 1, "order_amount": 88.0, "order_date": "2026-04-02"},
-  {"order_id": 1004, "customer_id": 3, "order_amount": 560.0, "order_date": "2026-04-02"},
-  {"order_id": 1005, "customer_id": 4, "order_amount": 99.9, "order_date": "2026-04-03"},
-  {"order_id": 1006, "customer_id": 2, "order_amount": 450.0, "order_date": "2026-04-03"}
-]

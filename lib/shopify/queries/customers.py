@@ -1,7 +1,6 @@
 """客户列表分页查询（字段保持 ETL 所需最小集，可按同格式扩展）。"""
 
 # GraphQL 变量约定：$first: Int!, $after: String
-# 与 lib.shopify.pager.iter_connection_nodes 配套使用。
 
 CUSTOMERS_PAGE_QUERY = """
 query CustomersPage($first: Int!, $after: String) {

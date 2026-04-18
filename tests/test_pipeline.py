@@ -13,10 +13,10 @@ import duckdb
 build_paths = import_module("etl_project.config").build_paths
 ProjectPaths = import_module("etl_project.config").ProjectPaths
 PipelineOptions = import_module("etl_project.models").PipelineOptions
-DataQualityError = import_module("etl_project.quality").DataQualityError
-raise_for_failed_quality_checks = import_module("etl_project.quality").raise_for_failed_quality_checks
-run_quality_checks = import_module("etl_project.quality").run_quality_checks
-run_pipeline = import_module("etl_project.pipeline").run_pipeline
+DataQualityError = import_module("etl_project.etl.quality").DataQualityError
+raise_for_failed_quality_checks = import_module("etl_project.etl.quality").raise_for_failed_quality_checks
+run_quality_checks = import_module("etl_project.etl.quality").run_quality_checks
+run_pipeline = import_module("etl_project.etl.pipeline").run_pipeline
 
 
 class PipelineTestCase(unittest.TestCase):
@@ -51,10 +51,17 @@ class PipelineTestCase(unittest.TestCase):
         shutil.copy2(source_paths.orders_file, raw_dir / "orders.csv")
         shutil.copy2(source_paths.postgres_init_file, sql_dir / "postgres" / "init_warehouse.sql")
 
+        data_dir = root_dir / "data"
+        products_dir = data_dir / "products"
+        orders_dir = data_dir / "orders"
+
         return ProjectPaths(
             root_dir=root_dir,
+            data_dir=data_dir,
             raw_dir=raw_dir,
             inbox_dir=inbox_dir,
+            products_dir=products_dir,
+            orders_dir=orders_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -62,6 +69,7 @@ class PipelineTestCase(unittest.TestCase):
             bi_dir=bi_dir,
             customers_file=raw_dir / "customers.csv",
             orders_file=raw_dir / "orders.csv",
+            storefront_products_json_file=products_dir / "storefront_products.json",
             database_file=warehouse_dir / "etl_learning.duckdb",
             export_file=output_dir / "sales_summary.csv",
             quality_report_file=output_dir / "quality_report.json",
@@ -98,16 +106,16 @@ class PipelineTestCase(unittest.TestCase):
                 "SELECT COUNT(*) FROM mart_daily_sales"
             ).fetchone()
             city_metric_row = connection.execute(
-                "SELECT gross_merchandise_value FROM mart_city_sales WHERE city = 'HANGZHOU' AND order_month = '2026-04'"
+                "SELECT gross_merchandise_value FROM mart_city_sales WHERE city = 'HANGZHOU' AND order_month = '2026-04' AND currency_code = 'CNY'"
             ).fetchone()
             customer_level_metric_row = connection.execute(
-                "SELECT customer_count FROM mart_customer_level_sales WHERE customer_level = 'gold' AND order_month = '2026-04'"
+                "SELECT customer_count FROM mart_customer_level_sales WHERE customer_level = 'gold' AND order_month = '2026-04' AND currency_code = 'CNY'"
             ).fetchone()
             summary_key_row = connection.execute(
                 "SELECT summary_key FROM mart_sales_summary ORDER BY summary_key LIMIT 1"
             ).fetchone()
             total_sales_row = connection.execute(
-                "SELECT ROUND(SUM(total_sales), 2) FROM mart_sales_summary"
+                "SELECT ROUND(SUM(net_sales), 2) FROM mart_sales_summary"
             ).fetchone()
         finally:
             connection.close()
@@ -136,7 +144,7 @@ class PipelineTestCase(unittest.TestCase):
         self.assertEqual(daily_mart_count, 3)
         self.assertEqual(hangzhou_gmv, 710.0)
         self.assertEqual(gold_customer_count, 2)
-        self.assertEqual(summary_key, "HANGZHOU|silver|2026-04")
+        self.assertEqual(summary_key, "HANGZHOU|silver|2026-04|CNY")
         self.assertEqual(total_sales, 2658.4)
 
     def test_pipeline_allows_skip_export(self) -> None:
@@ -205,7 +213,7 @@ class PipelineTestCase(unittest.TestCase):
                 "CREATE TABLE fact_orders (order_id INTEGER, customer_id INTEGER, order_amount DOUBLE, order_date DATE, order_month VARCHAR)"
             )
             connection.execute(
-                "CREATE TABLE mart_sales_summary (summary_key VARCHAR, city VARCHAR, customer_level VARCHAR, order_month VARCHAR, order_count INTEGER, total_sales DOUBLE, avg_order_amount DOUBLE)"
+                "CREATE TABLE mart_sales_summary (summary_key VARCHAR, city VARCHAR, customer_level VARCHAR, order_month VARCHAR, currency_code VARCHAR, order_count INTEGER, gross_sales DOUBLE, total_refunds DOUBLE, net_sales DOUBLE, avg_order_amount DOUBLE)"
             )
 
             connection.execute("INSERT INTO raw_customers VALUES (1, 'Alice', 'Shanghai', 'gold')")
@@ -214,7 +222,7 @@ class PipelineTestCase(unittest.TestCase):
             connection.execute("INSERT INTO dim_customers VALUES (1, 'Alice', 'SHANGHAI', 'gold')")
             connection.execute("INSERT INTO fact_orders VALUES (1001, 999, 100, DATE '2026-04-01', '2026-04')")
             connection.execute(
-                "INSERT INTO mart_sales_summary VALUES ('SHANGHAI|gold|2026-04', 'SHANGHAI', 'gold', '2026-04', 1, 100, 100)"
+                "INSERT INTO mart_sales_summary VALUES ('SHANGHAI|gold|2026-04|CNY', 'SHANGHAI', 'gold', '2026-04', 'CNY', 1, 100, 0, 100, 100)"
             )
 
             report = run_quality_checks(connection)

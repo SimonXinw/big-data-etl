@@ -1,4 +1,4 @@
-"""Shopify Storefront API GraphQL 客户端（与 Admin `/admin/api/...` 独立）。"""
+"""Shopify Storefront API：配置、GraphQL 客户端与商品目录分页遍历。"""
 
 from __future__ import annotations
 
@@ -6,11 +6,16 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Iterator, cast
 
 import requests
 
 from lib.shopify.errors import ShopifyConfigError, ShopifyGraphQLError
+from lib.shopify.queries.products import STOREFRONT_PRODUCTS_FULL_PAGE_QUERY
+
+# Storefront 单次 `products` 连接最大 first 一般为 250
+_DEFAULT_PAGE_SIZE = 250
+_DEFAULT_MAX_PAGES = 200
 
 
 @dataclass(frozen=True)
@@ -90,3 +95,52 @@ class ShopifyStorefrontClient:
             raise ShopifyGraphQLError("Storefront 响应缺少 data 字段。")
 
         return cast(dict[str, Any], data)
+
+
+def iter_storefront_product_nodes(
+    client: ShopifyStorefrontClient,
+    *,
+    page_size: int = _DEFAULT_PAGE_SIZE,
+    max_pages: int = _DEFAULT_MAX_PAGES,
+) -> Iterator[dict[str, Any]]:
+    """分页遍历店面全部商品，逐个 yield GraphQL `node` 字典。"""
+
+    after: str | None = None
+    pages = 0
+
+    while pages < max_pages:
+        pages += 1
+        data = client.execute(
+            STOREFRONT_PRODUCTS_FULL_PAGE_QUERY,
+            {"first": page_size, "after": after},
+        )
+        products = data.get("products")
+        if not isinstance(products, dict):
+            break
+
+        edges = products.get("edges")
+        if not isinstance(edges, list):
+            break
+
+        for edge in edges:
+            if not isinstance(edge, dict):
+                continue
+            node = edge.get("node")
+            if isinstance(node, dict):
+                yield node
+
+        page_info = products.get("pageInfo")
+        has_next = False
+        end_cursor: str | None = None
+        if isinstance(page_info, dict):
+            has_next = bool(page_info.get("hasNextPage"))
+            raw_cursor = page_info.get("endCursor")
+            end_cursor = raw_cursor if isinstance(raw_cursor, str) else None
+
+        batch = len(edges)
+        if not has_next or batch == 0:
+            break
+
+        after = end_cursor
+        if not after:
+            break

@@ -14,19 +14,24 @@
 
 Shopify 已接入代码库，但属于 **显式开关**，只有加上 `--source shopify` 时才会执行拉数逻辑。
 
-对应代码（编排顺序）在 `etl_project/pipeline.py`：
+对应代码（编排顺序）在 `etl_project/etl/pipeline.py`：
 
-1. 若 `data_source == "shopify"` → 先调用 `sync_shopify_to_csv()`，把 Admin GraphQL 结果写成 `data/raw` 下与示例一致的 CSV。
+1. 若 `data_source == "shopify"` → 调用 `sync_shopify_orders_incremental()`（`etl_project/integrations/shopify/admin/wide_sync.py`）：按 UTC 自然日 + `updated_at` 窗口拉 **Admin GraphQL** 订单宽表，写入 DuckDB `raw_shopify_orders` 并衍生 `raw_orders` / `raw_customers`；可选 UPSERT 到 PostgreSQL `raw.shopify_orders`；可选把快照写入 `data/orders/*.json`。**不再**经过「先写 `data/raw` CSV」这条旧路径。
 2. 若 `data_source == "inbox"` → 先 `materialize_raw_from_inbox()`。
-3. 然后三条源（csv / 上两步之后的 raw）**共用同一套后续步骤**：校验源文件 → DuckDB `load_raw_tables` → `run_transformations`（raw→stg→dw→mart）→ 质量检查 → 可选导出 → 可选发布 Postgres。
+3. `csv` / `inbox` 源：校验源文件 → DuckDB `load_raw_tables`。**shopify** 源跳过 CSV `load_raw_tables`**（宽表已写好 raw 表）**。之后三条源**共用**：`run_transformations`（raw→stg→dw→mart）→ 质量检查 → 可选导出 → 可选发布 Postgres。
 
-因此：**Shopify 只影响「第 0 步：把远程数据变成 raw CSV」**；清洗与分层始终是 DuckDB 里的 SQL（`load.py` / `transform.py`），与是否来自 Shopify 无关。
+因此：**Shopify 负责「Admin → 宽表 + 衍生 narrow raw」**；清洗与分层仍是 DuckDB 里同一套 SQL（`etl/transform.py`）。订单采集主链路为 `integrations/shopify/admin/wide_sync`（按 UTC **日历日**拆分 `updated_at` 窗口逐日拉取）。
 
 ## 2. 三步分别是什么、怎么执行？
 
-### 第一步：数据拉取（Shopify → `data/raw`）
+### 第一步：数据拉取（Shopify Admin → DuckDB raw 表 / 可选 JSON）
 
-**做什么**：通过 `lib.shopify` 调 Shopify **Admin GraphQL**（只读），分页拉客户与订单，由 `etl_project/shopify_sync.py` 写成项目约定的 **`customers.csv` / `orders.csv`**（路径在 `etl_project/config.py` 的 `ProjectPaths` 中，一般为 `data/raw/`）。
+**做什么**：通过 `lib.shopify` 调 **Admin GraphQL**（只读），按日与 bi-database 对齐的查询拉订单，由 `etl_project/integrations/shopify/admin/wide_sync.py` 映射为宽表行 → DuckDB `raw_shopify_orders`，再 SQL 衍生 `raw_customers` / `raw_orders`。可选：
+
+- 将连接快照按日追加写入固定文件 **`data/orders/shopify_orders_snapshot.json`**（可用 **`ETL_SHOPIFY_JSON_SNAPSHOT_ENABLE=0`** 关闭）；
+- 若配置 `ETL_POSTGRES_DSN`，对 **`raw.shopify_orders`** 做 UPSERT。
+
+字段映射见 `etl_project/integrations/shopify/admin/order_mapping.py`；GraphQL 文档见 `lib/shopify/queries/orders.py`（`ORDERS_BY_UPDATED_DAY_TEMPLATE`），单日查询组装见 `etl_project/integrations/shopify/admin/orders_bi.py`。
 
 **怎么执行**：
 
@@ -49,9 +54,10 @@ Shopify 已接入代码库，但属于 **显式开关**，只有加上 `--source
 
 ```text
 Shopify 同步: customers=<n>, orders=<m>
+Shopify 宽表 UPSERT 行数（批次累计）: <k>
 ```
 
-若仍没有这行，说明没有走到 `shopify` 分支（例如仍是默认 `csv`）。
+若仍没有这些行，说明没有走到 `shopify` 分支（例如仍是默认 `csv`）。
 
 **注意**：需要有效店铺与自定义应用 Access Token，且本机网络能访问 Shopify API。
 
@@ -63,10 +69,10 @@ Shopify 同步: customers=<n>, orders=<m>
 
 | 层次 | 做什么 | 代码位置 |
 |------|--------|----------|
-| **字段对齐（源 → raw）** | 把 GraphQL 的节点字段映射成与本地示例 CSV **相同的列名与类型约定**，保证后面 SQL 不用分叉。游客订单等规则也在此处理。 | `etl_project/shopify_sync.py`（注释写明：只负责「源系统 JSON → 统一 raw 列」） |
-| **清洗与建模（raw → mart）** | 去重、标准化、维表事实表、指标聚合、质量规则。 | `etl_project/load.py`、`etl_project/transform.py`、`etl_project/quality.py` |
+| **字段对齐（源 → raw）** | Shopify：宽表字段与 bi-database 订单表对齐，再衍生 narrow `raw_*` 供学习用 transform。 | `integrations/shopify/admin/order_mapping.py`、`integrations/shopify/admin/wide_sync.py`。 |
+| **清洗与建模（raw → mart）** | 去重、标准化、维表事实表、指标聚合、质量规则。 | `etl/load.py`、`etl/transform.py`、`etl/quality.py` |
 
-也就是说：**「和 Shopify 匹配」主要体现在 `shopify_sync` 把数据变成项目认的 raw 形态**；真正的「清洗」是 DuckDB 里统一的那套分层 SQL，**csv / inbox / shopify 三条源共用**。
+也就是说：**「和 Shopify 匹配」主要体现在宽表映射 + 衍生 narrow raw**；真正的「清洗」是 DuckDB 里统一的分层 SQL，**csv / inbox / shopify 三条源共用**（shopify 的 narrow 表由宽表 SQL 生成，而非 CSV 文件）。
 
 执行上**不需要单独第二条命令**：`--source shopify --target duckdb` 已包含拉数 + load + transform + 质量检查 + 导出（除非加 `--skip-export`）。
 

@@ -27,9 +27,9 @@
 
 与 ETL 编排解耦的 **可复用 Python 库**。当前仅包含：
 
-- `lib/shopify/`：Shopify **Admin GraphQL 只读**（`ShopifyAdminClient.execute`、Connection 分页、按文件拆分的 `queries/`）
+- `lib/shopify/`：通用只读访问——**Admin** 在 `admin.py`（`ShopifyAdminClient.execute`），**Storefront** 在 `storefront.py`；GraphQL 字符串在 `queries/*.py`（按日订单分页在 `etl_project.integrations.shopify.admin.wide_sync` 等业务模块内）
 
-原则：**不写 mutation、不做业务 reshape**；采集字段集中在 `queries/*.py`，需要新指标时在对应 query 中追加 selection 即可。
+原则：**不写 mutation、不在库内做业务 reshape**（业务侧在 `etl_project/integrations/...`）；采集字段集中在 `queries/*.py`，需要新指标时在对应 query 中追加 selection 即可。
 
 ### `etl_project/`
 
@@ -37,10 +37,12 @@
 
 ### `data/`
 
-存放学习过程中用到的输入和输出数据。
+存放学习过程中用到的输入和输出数据。细分约定见 **`data/README.md`**。
 
-- `inbox/`：本地中转（JSON 或 CSV），由 `data_inbox_sync.py` 物化为 `raw/` 下统一列名的 CSV
-- `raw/`：进入 DuckDB 的 CSV（可由 inbox、Shopify 同步或直接手写）
+- `inbox/`：本地中转（JSON 或 CSV），由 `integrations/inbox/materialize.py` 物化为 `raw/` 下统一列名的 CSV
+- `raw/`：进入 DuckDB 的 CSV（可由 inbox、`--source shopify` 衍生表写出，或直接手写）
+- `products/`：店面商品等 JSON 导出（如 `storefront_products.json`）
+- `orders/`：订单宽表 JSON 快照导出（可选，不落库仅排查时用）
 - `output/`：导出结果
 - `warehouse/`：本地 DuckDB 文件
 
@@ -69,12 +71,12 @@
 
 ## `etl_project/` 内部模块说明
 
-当前 `etl_project/` 采用**平铺**（一个包内多个 `.py`），对现在这个体量的学习型项目来说是合理默认：
+目录按职责分为两层：
 
-- 文件数量不多，跳转成本低，适合按 README 里的「学习顺序」从上到下读。
-- 模块边界已经比较清晰：`pipeline` 编排、`load`/`transform`/`postgres_loader` 分层、`shopify_sync` 采集、`quality` 质检等。
+- **`etl/`**：与具体厂商无关的 **通用管线**——编排 `pipeline.py`、`extract` / `load` / `transform`、`quality`、`postgres_loader`、`sync_logging`。
+- **`integrations/`**：**业务接入**——按来源分子包（如 `inbox/`、`shopify/`）。Shopify 再拆 **`admin/`**（订单宽表、映射、查询拼装）与 **`storefront/`**（商品导出、探针）；根下保留 **`compat.py`**（测试用别名）、**`api_smoke.py`**（冒烟）。
 
-什么时候值得拆子包（例如 `etl_project/sources/`、`etl_project/io/`）？常见触发条件是：采集端种类变多、测试需要大量 mock、或多人并行改同一包冲突明显。那时再拆，比过早分包更省事。
+根目录保留 **`cli.py`、`config.py`、`models.py`、`sync_chains.py`** 等入口与横切配置。
 
 ### `etl_project/__main__.py`
 
@@ -118,105 +120,46 @@ python -m etl_project
 这些结构不是业务核心，但多个模块都会用到，
 集中放在一起更清晰。
 
-### `etl_project/extract.py`
+### `etl_project/integrations/inbox/materialize.py`
 
-负责抽取阶段的准备工作：
+**本地中转适配器**：读取 `data/inbox` 下的 `customers` / `orders`（`.json` 优先于 `.csv`），规范字段后写入 `data/raw/*.csv`。
 
-- 列出输入文件
-- 检查文件是否存在
+### `etl_project/integrations/shopify/admin/`（Admin 主链路）
 
-这里故意保持简单，因为学习型项目的重点不在复杂采集，而在 ETL 主链路。
+- **`wide_sync.py`**：按 UTC 自然日拆分 `updated_at`、逐日分页拉订单宽表 → DuckDB / 可选 Postgres / 可选 JSON 快照；衍生 narrow `raw_*`。
+- **`order_mapping.py`**：GraphQL Order → 宽表列。
+- **`orders_bi.py`**：宽表 GraphQL 文本拼装。
 
-### `etl_project/data_inbox_sync.py`
+### `etl_project/integrations/shopify/storefront/`
 
-**本地中转适配器**：读取 `data/inbox` 下的 `customers` / `orders`（`.json` 优先于 `.csv`），规范字段后写入 `data/raw/*.csv`，再走与 CSV 源相同的 DuckDB 流程。
+店面商品：`export_storefront_products_json.py`、`products_probe.py`。
 
-### `etl_project/shopify_sync.py`
+### `etl_project/integrations/shopify/compat.py`
 
-编排层里的 **Shopify 适配器**：调用 `lib.shopify` 分页拉取客户与订单，把 GraphQL `node` 映射为 `data/raw` 下标准 CSV 列。
+兼容测试用的配置别名与标签映射。
 
-边界划分：
+### `etl_project/integrations/shopify/api_smoke.py`
 
-- **获取**：`lib.shopify`（通用 HTTP + GraphQL + 分页）
-- **源系统 -> raw 列**：`shopify_sync.py`
-- **raw -> mart**：`load.py` / `transform.py`（与数据源无关）
+Admin + Storefront 冒烟 CLI。
+
+### `etl_project/etl/`（通用管线）
+
+见包内 **`pipeline.py`（主编排）**、`extract` / `load` / `transform`、`quality`、`postgres_loader`、`sync_logging`。边界：**raw → mart** 的 SQL 与质检在此；**Shopify / inbox** 只在落地 raw 形态前介入。
 
 ### `etl_project/sync_chains.py`
 
 把常见运行方式封装成函数（例如 `run_inbox_to_duckdb`、`run_inbox_to_supabase`），方便脚本或调度器 **import 后一行调用**，而不必每次手写 `PipelineOptions` 组合。
 
-### `etl_project/load.py`
+### `etl_project/etl/load.py` / `transform.py` / `postgres_loader.py` / `quality.py`
 
-负责本地 DuckDB 的加载阶段：
+- **load**：目录、DuckDB 连接、CSV→raw、增量追加订单、导出 mart 汇总。
+- **transform**：raw→stg→dw→mart 全部 SQL（`mart_sales_summary`、`mart_daily_sales` 等）。
+- **postgres_loader**：DuckDB 结果发布到 PostgreSQL / Supabase。
+- **quality**：核心质量规则（空表、金额、外键、mart 非空等）。
 
-- 创建目录
-- 打开 DuckDB 连接
-- 读取 CSV 到 raw 层
-- 在增量模式下按 `order_id` 追加新订单
-- 导出 mart 汇总 CSV
+### `etl_project/etl/pipeline.py`
 
-### `etl_project/transform.py`
-
-负责所有 DuckDB SQL 转换逻辑。
-
-分层顺序：
-
-1. `raw`
-2. `stg`
-3. `dw`
-4. `mart`
-
-这样学习者可以更直观地理解数仓分层。
-
-当前 `mart` 层已经不只是一个简单汇总表，而是拆成了几类更接近业务分析的指标表：
-
-- `mart_sales_summary`
-- `mart_daily_sales`
-- `mart_city_sales`
-- `mart_customer_level_sales`
-
-这样更方便后续接 BI。
-
-### `etl_project/postgres_loader.py`
-
-负责把 DuckDB 已经转换好的结果，发布到 PostgreSQL / Supabase。
-
-这样做的好处是：
-
-- 只维护一套转换逻辑
-- 本地学习和远程落库共用一套 ETL 主线
-- 不会因为数据库不同而重复开发两套代码
-
-### `etl_project/quality.py`
-
-负责数据质量校验。
-
-这个模块的目标不是做特别重的平台，而是把最关键的质量规则先固化下来，
-比如：
-
-- 原始表不能为空
-- 订单金额不能非法
-- 事实表外键关系不能断裂
-- mart 层必须有结果
-
-这样更贴近真实项目里的 ETL 思路。
-
-### `etl_project/pipeline.py`
-
-这是整个项目最核心的编排层。
-
-它负责把下面这些步骤串起来：
-
-1. 准备目录
-2. 如选择 Shopify 数据源，则先同步到 `data/raw` 的 CSV
-3. 如选择 inbox 数据源，则先把 `data/inbox` 物化到 `data/raw` 的 CSV
-4. 检查输入文件
-5. 加载 raw 层
-6. 执行 SQL 转换
-7. 执行数据质量校验
-8. 如有需要，按增量规则追加订单
-9. 导出 CSV
-10. 按需发布到 PostgreSQL / Supabase
+主编排：准备目录 →（shopify / inbox / csv 分支）→ `load_raw_tables`（若适用）→ `transform` → `quality` → 导出 → 可选 Postgres。
 
 ## 数仓分层说明
 

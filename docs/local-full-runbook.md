@@ -17,7 +17,7 @@
 | `data/inbox` | `python -m etl_project --source inbox --target duckdb` / `run_etl_inbox_dev.ps1` |
 | Shopify | `python -m etl_project --source shopify --target duckdb` / `run_etl_shopify_dev.ps1`（需 `.env`） |
 
-**你不需要手动依次执行** `extract.py`、`load.py`、`transform.py` 等文件；`python -m etl_project` 内部会按顺序调用它们。
+**你不需要手动依次执行** `etl/extract.py`、`etl/load.py`、`etl/transform.py` 等文件；`python -m etl_project` 内部会按顺序调用它们。
 
 **产物路径**（由 `etl_project/config.py` 决定）：
 
@@ -25,7 +25,7 @@
 - `data/output/sales_summary.csv`
 - `data/output/quality_report.json`
 
-一键最短演示（依赖 + 默认 ETL）：`.\scripts\dev\run_local_duckdb_demo_dev.ps1`
+一键最短演示（依赖 + 默认 ETL）：先 `.\scripts\dev\install_deps_dev.ps1`，再 `.\scripts\dev\run_etl_csv_dev.ps1`。
 
 ---
 
@@ -45,7 +45,7 @@
 
 ## C. 关于「每个流程一个 `xxx_dev` 副本」
 
-- **代码层面**：没有为每个阶段维护第二套 `*_dev.py`；阶段都在 `etl_project/pipeline.py` 里编排。
+- **代码层面**：没有为每个阶段维护第二套 `*_dev.py`；阶段都在 `etl_project/etl/pipeline.py` 里编排。
 - **本仓库提供的「副本」**：`scripts/dev/` 下若干 **`*_dev.ps1`**，每个对应一种你常跑的本地命令组合，可直接执行。
 - **若你希望连 DuckDB 文件名也隔离成 `*_dev`**：当前 `config.py` 未提供环境开关，需要自行改 `database_file` 或复制整个 `data/` 目录做实验；需要可作为后续小功能再加。
 
