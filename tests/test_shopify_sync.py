@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import os
 import shutil
 import tempfile
@@ -50,6 +51,7 @@ class ShopifySyncTestCase(unittest.TestCase):
         data_dir = root_dir / "data"
         products_dir = data_dir / "products"
         orders_dir = data_dir / "orders"
+        backup_dir = data_dir / "backup"
 
         return ProjectPaths(
             root_dir=root_dir,
@@ -58,6 +60,7 @@ class ShopifySyncTestCase(unittest.TestCase):
             inbox_dir=inbox_dir,
             products_dir=products_dir,
             orders_dir=orders_dir,
+            backup_dir=backup_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -201,6 +204,7 @@ class ShopifyPipelineIntegrationTestCase(unittest.TestCase):
         data_dir = root_dir / "data"
         products_dir = data_dir / "products"
         orders_dir = data_dir / "orders"
+        backup_dir = data_dir / "backup"
 
         return ProjectPaths(
             root_dir=root_dir,
@@ -209,6 +213,7 @@ class ShopifyPipelineIntegrationTestCase(unittest.TestCase):
             inbox_dir=inbox_dir,
             products_dir=products_dir,
             orders_dir=orders_dir,
+            backup_dir=backup_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -247,9 +252,14 @@ class ShopifyPipelineIntegrationTestCase(unittest.TestCase):
         with patch("etl_project.etl.pipeline.sync_shopify_orders_incremental", side_effect=fake_wide_sync):
             result = run_pipeline(paths, PipelineOptions(target="duckdb", data_source="shopify"))
 
+        with sample_paths.customers_file.open(newline="", encoding="utf-8") as customer_handle:
+            expected_customer_rows = sum(1 for _ in csv.DictReader(customer_handle))
+        with sample_paths.orders_file.open(newline="", encoding="utf-8") as order_handle:
+            expected_order_rows = sum(1 for _ in csv.DictReader(order_handle))
+
         self.assertEqual(result.data_source, "shopify")
-        self.assertEqual(result.shopify_customer_rows, 4)
-        self.assertEqual(result.shopify_order_rows, 6)
+        self.assertEqual(result.shopify_customer_rows, expected_customer_rows)
+        self.assertEqual(result.shopify_order_rows, expected_order_rows)
         self.assertEqual(result.shopify_wide_orders_merged, 6)
         self.assertEqual(result.loaded_sources, ["shopify_orders_wide"])
         self.assertTrue(paths.database_file.exists())

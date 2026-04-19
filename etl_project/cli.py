@@ -36,7 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-export",
         action="store_true",
-        help="跳过本地 CSV 导出。",
+        help="跳过本地 CSV 导出（仅 mart 汇总 sales_summary.csv）。",
+    )
+    parser.add_argument(
+        "--skip-layer-backup",
+        action="store_true",
+        help="跳过分层备份（默认写入 data/backup/<raw|stg|dw|mart>/ 下各表 CSV）。",
     )
     parser.add_argument(
         "--postgres-dsn",
@@ -113,6 +118,7 @@ def main() -> None:
             target=args.target,
             data_source=args.source,
             export_summary=not args.skip_export,
+            export_layer_backups=not args.skip_layer_backup,
             postgres_dsn=args.postgres_dsn,
             incremental_load=args.incremental,
             shopify_sync_days=args.shopify_days,
@@ -131,6 +137,8 @@ def main() -> None:
     print(f"增量模式: {result.incremental_load}")
     print(f"数据库文件: {result.database_path}")
     print(f"导出文件: {result.export_path}")
+    if result.layer_backup_paths:
+        print(f"分层备份 CSV 共 {len(result.layer_backup_paths)} 个（目录: {Path(result.layer_backup_paths[0]).parent.parent}）")
     print(f"质量报告: {result.quality_report_path}")
     print(f"已加载数据源: {', '.join(result.loaded_sources)}")
     print(f"本次新增订单行数: {result.inserted_order_rows}")

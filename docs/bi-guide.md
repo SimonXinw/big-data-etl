@@ -41,10 +41,10 @@ CSV / 埋点数据
 
 如果你把结果发布到了 PostgreSQL / Supabase，对应 schema 一般是 `mart`，表名会是：
 
-- `mart.daily_sales`
-- `mart.city_sales`
-- `mart.customer_level_sales`
-- `mart.sales_summary`
+- `mart.big_data_etl_daily_sales`
+- `mart.big_data_etl_city_sales`
+- `mart.big_data_etl_customer_level_sales`
+- `mart.big_data_etl_sales_summary`
 
 其中最适合入门做 BI 的是：
 

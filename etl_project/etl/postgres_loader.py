@@ -31,27 +31,27 @@ class PublishPlan:
 
 
 DELETE_ORDER = (
-    "mart.daily_sales",
-    "mart.city_sales",
-    "mart.customer_level_sales",
-    "mart.sales_summary",
-    "dw.fact_orders",
-    "dw.dim_customers",
-    "stg.orders_clean",
-    "stg.customers_clean",
-    "raw.orders_raw",
-    "raw.customers_raw",
+    "mart.big_data_etl_daily_sales",
+    "mart.big_data_etl_city_sales",
+    "mart.big_data_etl_customer_level_sales",
+    "mart.big_data_etl_sales_summary",
+    "dw.big_data_etl_fact_orders",
+    "dw.big_data_etl_dim_customers",
+    "stg.big_data_etl_orders_clean",
+    "stg.big_data_etl_customers_clean",
+    "raw.big_data_etl_orders_raw",
+    "raw.big_data_etl_customers_raw",
 )
 
 
 PUBLISH_PLANS = (
     PublishPlan(
-        target_table="raw.customers_raw",
+        target_table="raw.big_data_etl_customers_raw",
         select_sql="SELECT customer_id, customer_name, city, customer_level FROM raw_customers ORDER BY customer_id",
         columns=("customer_id", "customer_name", "city", "customer_level"),
     ),
     PublishPlan(
-        target_table="raw.orders_raw",
+        target_table="raw.big_data_etl_orders_raw",
         select_sql=(
             "SELECT order_id, customer_id, order_amount, order_date, currency_code, ship_country, refund_amount "
             "FROM raw_orders ORDER BY order_id"
@@ -67,12 +67,12 @@ PUBLISH_PLANS = (
         ),
     ),
     PublishPlan(
-        target_table="stg.customers_clean",
+        target_table="stg.big_data_etl_customers_clean",
         select_sql="SELECT customer_id, customer_name, city, customer_level FROM stg_customers ORDER BY customer_id",
         columns=("customer_id", "customer_name", "city", "customer_level"),
     ),
     PublishPlan(
-        target_table="stg.orders_clean",
+        target_table="stg.big_data_etl_orders_clean",
         select_sql=(
             "SELECT order_id, customer_id, order_amount, order_date, order_month, currency_code, ship_country, "
             "refund_amount, net_amount FROM stg_orders ORDER BY order_id"
@@ -90,12 +90,12 @@ PUBLISH_PLANS = (
         ),
     ),
     PublishPlan(
-        target_table="dw.dim_customers",
+        target_table="dw.big_data_etl_dim_customers",
         select_sql="SELECT customer_id, customer_name, city, customer_level FROM dim_customers ORDER BY customer_id",
         columns=("customer_id", "customer_name", "city", "customer_level"),
     ),
     PublishPlan(
-        target_table="dw.fact_orders",
+        target_table="dw.big_data_etl_fact_orders",
         select_sql=(
             "SELECT order_id, customer_id, order_amount, order_date, order_month, currency_code, ship_country, "
             "refund_amount, net_amount FROM fact_orders ORDER BY order_id"
@@ -113,7 +113,7 @@ PUBLISH_PLANS = (
         ),
     ),
     PublishPlan(
-        target_table="mart.sales_summary",
+        target_table="mart.big_data_etl_sales_summary",
         select_sql=(
             "SELECT summary_key, city, customer_level, order_month, currency_code, order_count, gross_sales, "
             "total_refunds, net_sales, avg_order_amount FROM mart_sales_summary ORDER BY summary_key"
@@ -132,7 +132,7 @@ PUBLISH_PLANS = (
         ),
     ),
     PublishPlan(
-        target_table="mart.daily_sales",
+        target_table="mart.big_data_etl_daily_sales",
         select_sql=(
             "SELECT order_date, order_month, currency_code, order_count, customer_count, gross_merchandise_value, "
             "total_refunds, net_sales, average_order_value FROM mart_daily_sales ORDER BY order_date, currency_code"
@@ -150,7 +150,7 @@ PUBLISH_PLANS = (
         ),
     ),
     PublishPlan(
-        target_table="mart.city_sales",
+        target_table="mart.big_data_etl_city_sales",
         select_sql=(
             "SELECT city, order_month, currency_code, order_count, customer_count, gross_merchandise_value, "
             "total_refunds, net_sales, average_order_value FROM mart_city_sales ORDER BY city, order_month, currency_code"
@@ -168,7 +168,7 @@ PUBLISH_PLANS = (
         ),
     ),
     PublishPlan(
-        target_table="mart.customer_level_sales",
+        target_table="mart.big_data_etl_customer_level_sales",
         select_sql=(
             "SELECT customer_level, order_month, currency_code, order_count, customer_count, gross_merchandise_value, "
             "total_refunds, net_sales, average_order_value FROM mart_customer_level_sales ORDER BY "

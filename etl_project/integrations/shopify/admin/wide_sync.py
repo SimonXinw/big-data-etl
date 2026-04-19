@@ -105,11 +105,31 @@ def _placeholder_sql(n: int) -> str:
     return ", ".join(["?"] * n)
 
 
-def _insert_or_ignore_sql() -> str:
+def _duckdb_shopify_wide_upsert_sql() -> str:
+    """同一 ``shopify_gid`` 再次写入时用新快照覆盖旧行（保持一行一单的最新副本）。"""
+
     cols = ", ".join(SHOPIFY_ORDER_COLUMNS)
     ph = _placeholder_sql(len(SHOPIFY_ORDER_COLUMNS))
 
-    return f"INSERT OR IGNORE INTO raw_shopify_orders ({cols}) VALUES ({ph})"
+    return f"INSERT OR REPLACE INTO raw_shopify_orders ({cols}) VALUES ({ph})"
+
+
+def _postgres_shopify_wide_upsert_sql() -> str:
+    """PostgreSQL 宽表：``ON CONFLICT (shopify_gid) DO UPDATE`` 与 DuckDB UPSERT 语义对齐。"""
+
+    cols = list(SHOPIFY_ORDER_COLUMNS)
+    insert_cols = ", ".join(cols)
+    placeholders = ", ".join(["%s"] * len(cols))
+    update_cols = [c for c in cols if c != "shopify_gid"]
+    set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
+    return (
+        f"INSERT INTO raw.big_data_etl_shopify_orders ({insert_cols}) VALUES ({placeholders}) "
+        f"ON CONFLICT (shopify_gid) DO UPDATE SET {set_clause}"
+    )
+
+
+_DUCKDB_SHOPIFY_WIDE_UPSERT_SQL = _duckdb_shopify_wide_upsert_sql()
+_POSTGRES_SHOPIFY_WIDE_UPSERT_SQL = _postgres_shopify_wide_upsert_sql()
 
 
 def rebuild_narrow_raw_tables_from_shopify(connection: duckdb.DuckDBPyConnection) -> None:
@@ -140,12 +160,23 @@ def rebuild_narrow_raw_tables_from_shopify(connection: duckdb.DuckDBPyConnection
         """
         CREATE OR REPLACE TABLE raw_customers AS
         SELECT
-            CAST(customer_legacy_id AS BIGINT) AS customer_id,
-            COALESCE(NULLIF(TRIM(customer_display_name), ''), 'guest') AS customer_name,
-            UPPER(TRIM(COALESCE(NULLIF(shipping_city, ''), 'unknown'))) AS city,
-            'standard' AS customer_level
-        FROM raw_shopify_orders
-        WHERE customer_legacy_id IS NOT NULL
+            customer_id,
+            customer_name,
+            city,
+            customer_level
+        FROM (
+            SELECT
+                CAST(customer_legacy_id AS BIGINT) AS customer_id,
+                COALESCE(NULLIF(TRIM(customer_display_name), ''), 'guest') AS customer_name,
+                UPPER(TRIM(COALESCE(NULLIF(shipping_city, ''), 'unknown'))) AS city,
+                'standard' AS customer_level
+            FROM raw_shopify_orders
+            WHERE customer_legacy_id IS NOT NULL
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY CAST(customer_legacy_id AS BIGINT)
+                ORDER BY legacy_order_id DESC NULLS LAST, shopify_gid DESC
+            ) = 1
+        )
         """
     )
 
@@ -289,11 +320,10 @@ def _merge_rows_duckdb(connection: duckdb.DuckDBPyConnection, rows: list[dict[st
     if not rows:
         return 0
 
-    sql = _insert_or_ignore_sql()
     synced = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     batch = [row_dict_to_tuple(row, etl_synced_at=synced) for row in rows]
 
-    connection.executemany(sql, batch)
+    connection.executemany(_DUCKDB_SHOPIFY_WIDE_UPSERT_SQL, batch)
 
     return len(batch)
 
@@ -312,13 +342,7 @@ def _insert_postgres(rows: list[dict[str, Any]], postgres_dsn: str) -> int:
     _require_psycopg()
     import psycopg
 
-    cols = list(SHOPIFY_ORDER_COLUMNS)
-    insert_cols = ", ".join(cols)
-    placeholders = ", ".join(["%s"] * len(cols))
-    sql = (
-        f"INSERT INTO raw.shopify_orders ({insert_cols}) VALUES ({placeholders}) "
-        "ON CONFLICT (shopify_gid) DO NOTHING"
-    )
+    sql = _POSTGRES_SHOPIFY_WIDE_UPSERT_SQL
 
     synced = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     tuples = [row_dict_to_tuple(row, etl_synced_at=synced) for row in rows]
@@ -350,7 +374,8 @@ def sync_shopify_orders_incremental(
 ) -> ShopifyWideSyncSummary:
     """按 UTC 日历日回溯 N 天：每日单独查询「该日 `updated_at` 窗口」内的订单（游标分页）。
 
-    不在此轮开始前清空宽表：DuckDB 使用 ``INSERT OR IGNORE``、PostgreSQL 使用 ``ON CONFLICT DO NOTHING``，已存在的 ``shopify_gid`` 跳过。
+    不在此轮开始前清空宽表：DuckDB ``INSERT OR REPLACE``、PostgreSQL ``ON CONFLICT (shopify_gid) DO UPDATE``，
+    已存在的 ``shopify_gid`` 用本轮 API 快照**覆盖**为最新一行。
     默认将每日拉取的订单**当日写入一次** JSON（``data/orders/shopify_orders_snapshot.json``，可用 ``ETL_SHOPIFY_JSON_SNAPSHOT_ENABLE`` 关闭），按日追加到 ``orders`` 数组末尾。
     """
 
@@ -396,7 +421,10 @@ def sync_shopify_orders_incremental(
 
         _ensure_wide_table(connection)
 
-        log.info(PHASE_ORDERS_WIDE, "增量写入：已有 shopify_gid 跳过（DuckDB INSERT OR IGNORE / Postgres ON CONFLICT DO NOTHING）")
+        log.info(
+            PHASE_ORDERS_WIDE,
+            "宽表写入：shopify_gid 存在则覆盖为最新快照（DuckDB INSERT OR REPLACE / Postgres ON CONFLICT DO UPDATE）",
+        )
 
         for day in _daterange(start_d, end_d):
             day_str = day.strftime("%Y-%m-%d")

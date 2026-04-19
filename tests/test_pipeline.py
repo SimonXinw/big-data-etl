@@ -54,6 +54,7 @@ class PipelineTestCase(unittest.TestCase):
         data_dir = root_dir / "data"
         products_dir = data_dir / "products"
         orders_dir = data_dir / "orders"
+        backup_dir = data_dir / "backup"
 
         return ProjectPaths(
             root_dir=root_dir,
@@ -62,6 +63,7 @@ class PipelineTestCase(unittest.TestCase):
             inbox_dir=inbox_dir,
             products_dir=products_dir,
             orders_dir=orders_dir,
+            backup_dir=backup_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -88,6 +90,11 @@ class PipelineTestCase(unittest.TestCase):
         self.assertEqual(result.target, "duckdb")
         self.assertEqual(result.published_tables, [])
         self.assertIsNotNone(result.quality_report)
+        self.assertGreater(len(result.layer_backup_paths), 0)
+        self.assertTrue((paths.backup_dir / "raw" / "raw_customers.csv").exists())
+        self.assertTrue((paths.backup_dir / "stg" / "stg_orders.csv").exists())
+        self.assertTrue((paths.backup_dir / "dw" / "fact_orders.csv").exists())
+        self.assertTrue((paths.backup_dir / "mart" / "mart_sales_summary.csv").exists())
 
         quality_report = result.quality_report
         assert quality_report is not None
@@ -155,6 +162,17 @@ class PipelineTestCase(unittest.TestCase):
         self.assertEqual(result.target, "duckdb")
         self.assertEqual(result.loaded_sources, ["customers", "orders"])
         self.assertTrue(paths.quality_report_file.exists())
+        self.assertGreater(len(result.layer_backup_paths), 0)
+
+    def test_pipeline_allows_skip_layer_backup(self) -> None:
+        paths = self._build_temp_paths()
+
+        result = run_pipeline(
+            paths,
+            PipelineOptions(target="duckdb", export_layer_backups=False),
+        )
+
+        self.assertEqual(result.layer_backup_paths, [])
 
     def test_pipeline_incremental_load_only_appends_new_orders(self) -> None:
         paths = self._build_temp_paths()

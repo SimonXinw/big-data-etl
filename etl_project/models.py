@@ -25,6 +25,7 @@ class PipelineOptions:
     target: str = "duckdb"
     data_source: str = "csv"
     export_summary: bool = True
+    export_layer_backups: bool = True
     postgres_dsn: str = ""
     fail_on_quality_error: bool = True
     incremental_load: bool = False
@@ -73,6 +74,7 @@ class PipelineResult:
     export_path: str
     loaded_sources: list[str]
     published_tables: list[str] = field(default_factory=list)
+    layer_backup_paths: list[str] = field(default_factory=list)
     quality_report: QualityReport | None = None
     quality_report_path: str = ""
     incremental_load: bool = False

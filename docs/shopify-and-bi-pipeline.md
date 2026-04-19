@@ -16,7 +16,7 @@ Shopify 已接入代码库，但属于 **显式开关**，只有加上 `--source
 
 对应代码（编排顺序）在 `etl_project/etl/pipeline.py`：
 
-1. 若 `data_source == "shopify"` → 调用 `sync_shopify_orders_incremental()`（`etl_project/integrations/shopify/admin/wide_sync.py`）：按 UTC 自然日 + `updated_at` 窗口拉 **Admin GraphQL** 订单宽表，写入 DuckDB `raw_shopify_orders` 并衍生 `raw_orders` / `raw_customers`；可选 UPSERT 到 PostgreSQL `raw.shopify_orders`；可选把快照写入 `data/orders/*.json`。**不再**经过「先写 `data/raw` CSV」这条旧路径。
+1. 若 `data_source == "shopify"` → 调用 `sync_shopify_orders_incremental()`（`etl_project/integrations/shopify/admin/wide_sync.py`）：按 UTC 自然日 + `updated_at` 窗口拉 **Admin GraphQL** 订单宽表，写入 DuckDB `raw_shopify_orders` 并衍生 `raw_orders` / `raw_customers`；可选 UPSERT 到 PostgreSQL `raw.big_data_etl_shopify_orders`；可选把快照写入 `data/orders/*.json`。**不再**经过「先写 `data/raw` CSV」这条旧路径。
 2. 若 `data_source == "inbox"` → 先 `materialize_raw_from_inbox()`。
 3. `csv` / `inbox` 源：校验源文件 → DuckDB `load_raw_tables`。**shopify** 源跳过 CSV `load_raw_tables`**（宽表已写好 raw 表）**。之后三条源**共用**：`run_transformations`（raw→stg→dw→mart）→ 质量检查 → 可选导出 → 可选发布 Postgres。
 
@@ -29,7 +29,7 @@ Shopify 已接入代码库，但属于 **显式开关**，只有加上 `--source
 **做什么**：通过 `lib.shopify` 调 **Admin GraphQL**（只读），按日与 bi-database 对齐的查询拉订单，由 `etl_project/integrations/shopify/admin/wide_sync.py` 映射为宽表行 → DuckDB `raw_shopify_orders`，再 SQL 衍生 `raw_customers` / `raw_orders`。可选：
 
 - 将连接快照按日追加写入固定文件 **`data/orders/shopify_orders_snapshot.json`**（可用 **`ETL_SHOPIFY_JSON_SNAPSHOT_ENABLE=0`** 关闭）；
-- 若配置 `ETL_POSTGRES_DSN`，对 **`raw.shopify_orders`** 做 UPSERT。
+- 若配置 `ETL_POSTGRES_DSN`，对 **`raw.big_data_etl_shopify_orders`** 做 UPSERT。
 
 字段映射见 `etl_project/integrations/shopify/admin/order_mapping.py`；GraphQL 文档见 `lib/shopify/queries/orders.py`（`ORDERS_BY_UPDATED_DAY_TEMPLATE`），单日查询组装见 `etl_project/integrations/shopify/admin/orders_bi.py`。
 
@@ -117,7 +117,7 @@ Python ETL（DuckDB 内计算） → 发布到 PostgreSQL / Supabase → Metabas
 
 5. **在 Metabase 里「添加数据库」**：类型选 PostgreSQL，填写与 `ETL_POSTGRES_DSN` 一致的连接信息。
 
-6. **建问题 / 仪表盘**：优先用 `mart` schema 下的表（如 `mart.daily_sales`、`mart.city_sales` 等），具体图表与口径见 `docs/metabase-dashboard-template.md`。
+6. **建问题 / 仪表盘**：优先用 `mart` schema 下的表（如 `mart.big_data_etl_daily_sales`、`mart.big_data_etl_city_sales` 等），具体图表与口径见 `docs/metabase-dashboard-template.md`。
 
 若 Metabase 与 Postgres 不在同一台机器，注意防火墙与连接串中的 host 要互相可达。
 

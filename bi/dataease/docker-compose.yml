@@ -1,0 +1,63 @@
+# DataEase 2.x（浏览器 http://localhost:8100）
+# 登录与 MariaDB / admin 密码对照：见同目录 README.md（勿把网页登录口令写在本文件混淆）
+#
+# 【与本 compose 有关的库】下方 mysql / dataease 里的 DB_*、DB_PASSWORD 仅指向「容器名 mysql」
+# 这套 MariaDB：只存 DataEase 自己的配置与元数据，不是你的 Supabase 业务库。
+#
+# 【业务分析库 / Supabase Postgres】不要写在本文件里——官方镜像不会去替你注册数据源。
+# 登录 DataEase → 数据源 → 新建 PostgreSQL → 填 Supabase 主机、端口、库名、用户、密码。
+# 学习阶段可把连接串记在「本目录」单独 .env（勿提交仓库），仅供你自己复制进界面。
+#
+# 常用命令：docker compose up -d | docker compose down
+# 持久化目录：./de_data/
+#
+# 【MariaDB 账号（仅 DataEase 自用）】以下为学习用写死口令，开箱即可 up；换密码需删 de_data/mariadb 后重建。
+#   库名 dataease | 用户 root | 口令 dataease_root_dev
+
+services:
+  mysql:
+    image: mariadb:10.6
+    container_name: de-mysql
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      MARIADB_DATABASE: dataease
+      MARIADB_ROOT_PASSWORD: dataease_root_dev
+    volumes:
+      - ./de_data/mariadb/data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MARIADB_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    networks:
+      - dataease
+
+  dataease:
+    image: wojiushixiaobai/dataease:v2.10.10
+    container_name: de-core
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: dataease
+      DB_USER: root
+      DB_PASSWORD: dataease_root_dev
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./de_data/core/data:/opt/dataease2.0/data
+      - ./de_data/core/geo:/opt/dataease2.0/data/geo
+      - ./de_data/core/logs:/opt/dataease2.0/logs
+      - ./de_data/core/cache:/opt/dataease2.0/cache
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - dataease
+
+networks:
+  dataease:
+    name: dataease

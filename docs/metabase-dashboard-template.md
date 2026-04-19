@@ -18,7 +18,7 @@
 3. `mart_customer_level_sales`
 4. `mart_sales_summary`
 
-如果你连的是 PostgreSQL / Supabase（推荐用于 Metabase），字段口径保持一致，但表一般在 `mart` schema 下，名称对应为 `daily_sales` / `city_sales` / `customer_level_sales` / `sales_summary`。
+如果你连的是 PostgreSQL / Supabase（推荐用于 Metabase），字段口径保持一致，但表一般在 `mart` schema 下，名称对应为 `big_data_etl_daily_sales` / `big_data_etl_city_sales` / `big_data_etl_customer_level_sales` / `big_data_etl_sales_summary`。
 
 ## 核心指标口径
 

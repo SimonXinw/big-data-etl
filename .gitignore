@@ -7,3 +7,5 @@ __pycache__/
 node_modules/
 # data/ 运行产物与本地导出（需提交示例时可 git add -f 或收窄规则）
 data/*
+# DataEase 本地运行时数据（MariaDB / 缓存等）
+bi/dataease/de_data/

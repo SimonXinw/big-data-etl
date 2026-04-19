@@ -39,8 +39,9 @@ big-data-etl/
 │  └─ dags/
 │     └─ python_etl_dag.py         # Airflow 调度示例
 ├─ bi/
-│  └─ metabase/
-│     └─ docker-compose.yml        # Metabase 本地启动骨架
+│  └─ dataease/
+│     ├─ README.md                 # DataEase：默认账号、MariaDB 说明、启停命令
+│     └─ docker-compose.yml        # DataEase + 内置 MariaDB（BI 前端）
 ├─ data/
 │  ├─ README.md                    # data 子目录约定说明
 │  ├─ inbox/                       # 本地中转：json/csv → 物化为 raw
@@ -190,7 +191,7 @@ JSON 推荐顶层为**数组**；也支持根对象内含 `customers` / `orders`
 
 ## Shopify 后台数据接入（订单 -> 同一套 ETL -> BI）
 
-Shopify 侧使用 **`lib/shopify` 封装的 Admin GraphQL**（自定义应用 Access Token）。**主链路**为 `etl_project/integrations/shopify/admin/wide_sync.py`：按 **`--shopify-days` / `ETL_SHOPIFY_SYNC_DAYS`** 回溯若干 **UTC 自然日**，**每日单独**查询该日内 `updated_at` 窗口 → 订单宽表写入 DuckDB（可选 **PostgreSQL `raw.shopify_orders`** UPSERT、**`data/orders/`** JSON 快照）。随后由衍生的 `raw_orders` / `raw_customers` 进入 **`transform.py`**。
+Shopify 侧使用 **`lib/shopify` 封装的 Admin GraphQL**（自定义应用 Access Token）。**主链路**为 `etl_project/integrations/shopify/admin/wide_sync.py`：按 **`--shopify-days` / `ETL_SHOPIFY_SYNC_DAYS`** 回溯若干 **UTC 自然日**，**每日单独**查询该日内 `updated_at` 窗口 → 订单宽表写入 DuckDB（可选 **PostgreSQL `raw.big_data_etl_shopify_orders`** UPSERT、**`data/orders/`** JSON 快照）。随后由衍生的 `raw_orders` / `raw_customers` 进入 **`transform.py`**。
 
 **端到端说明**：`docs/shopify-and-bi-pipeline.md`。
 
@@ -227,11 +228,11 @@ python -m etl_project --source shopify --target postgres
 
 - 衍生 narrow 层里 `customer_level` 当前为占位 **`standard`**（与宽表学习路径一致）；若需按 tags 映射可扩展 `integrations/shopify/admin/order_mapping` / 衍生 SQL
 - 游客订单使用与简版同步一致的合成 `customer_legacy_id` 规则
-- 新增业务字段：GraphQL 见 **`lib/shopify/queries/orders.py`**（宽表模板 `ORDERS_BY_UPDATED_DAY_TEMPLATE`），单日组装逻辑见 **`etl_project/integrations/shopify/admin/orders_bi.py`**；映射改 **`integrations/shopify/admin/order_mapping.py`**；必要时同步 **`sql/postgres/init_warehouse.sql`** 中 `raw.shopify_orders`
+- 新增业务字段：GraphQL 见 **`lib/shopify/queries/orders.py`**（宽表模板 `ORDERS_BY_UPDATED_DAY_TEMPLATE`），单日组装逻辑见 **`etl_project/integrations/shopify/admin/orders_bi.py`**；映射改 **`integrations/shopify/admin/order_mapping.py`**；必要时同步 **`sql/postgres/init_warehouse.sql`** 中 `raw.big_data_etl_shopify_orders`
 
 ### 3. 看 BI 报表
 
-流程与 CSV 场景一致：PostgreSQL / Supabase 落库后，用 Metabase 连接数据库，优先使用 `mart` schema 下的 `daily_sales` / `city_sales` / `customer_level_sales` / `sales_summary` 建图（详见 `docs/bi-guide.md` 与 `docs/metabase-dashboard-template.md`）。
+流程与 CSV 场景一致：PostgreSQL / Supabase 落库后，用 Metabase 连接数据库，优先使用 `mart` schema 下的 `big_data_etl_daily_sales` / `big_data_etl_city_sales` / `big_data_etl_customer_level_sales` / `big_data_etl_sales_summary` 建图（详见 `docs/bi-guide.md` 与 `docs/metabase-dashboard-template.md`）。
 
 ## 快速开始
 
@@ -347,16 +348,16 @@ python -m etl_project --source inbox --target postgres
 
 如果你使用 PostgreSQL / Supabase 目标，还会把这些表发布出去：
 
-- `raw.customers_raw`
-- `raw.orders_raw`
-- `stg.customers_clean`
-- `stg.orders_clean`
-- `dw.dim_customers`
-- `dw.fact_orders`
-- `mart.sales_summary`
-- `mart.daily_sales`
-- `mart.city_sales`
-- `mart.customer_level_sales`
+- `raw.big_data_etl_customers_raw`
+- `raw.big_data_etl_orders_raw`
+- `stg.big_data_etl_customers_clean`
+- `stg.big_data_etl_orders_clean`
+- `dw.big_data_etl_dim_customers`
+- `dw.big_data_etl_fact_orders`
+- `mart.big_data_etl_sales_summary`
+- `mart.big_data_etl_daily_sales`
+- `mart.big_data_etl_city_sales`
+- `mart.big_data_etl_customer_level_sales`
 
 ## 现在已经支持的业务指标
 
@@ -389,12 +390,12 @@ python -m etl_project --source inbox --target postgres
 
 - `docs/bi-guide.md`
 - `docs/metabase-dashboard-template.md`
-- `bi/metabase/docker-compose.yml`
+- `bi/dataease/docker-compose.yml`（DataEase；**默认登录与内置库说明见 `bi/dataease/README.md`**）
 
 推荐链路：
 
 ```text
-Python ETL -> PostgreSQL / Supabase -> Metabase
+Python ETL -> PostgreSQL / Supabase -> BI（Metabase / DataEase 等）
 ```
 
 如果你想直接照着搭仪表盘，可以看：

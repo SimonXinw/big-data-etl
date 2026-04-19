@@ -71,6 +71,7 @@ class InboxSyncTestCase(unittest.TestCase):
         data_dir = root_dir / "data"
         products_dir = data_dir / "products"
         orders_dir = data_dir / "orders"
+        backup_dir = data_dir / "backup"
 
         return ProjectPaths(
             root_dir=root_dir,
@@ -79,6 +80,7 @@ class InboxSyncTestCase(unittest.TestCase):
             inbox_dir=inbox_dir,
             products_dir=products_dir,
             orders_dir=orders_dir,
+            backup_dir=backup_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,
@@ -136,6 +138,7 @@ class InboxSyncTestCase(unittest.TestCase):
         data_dir = root_dir / "data"
         products_dir = data_dir / "products"
         orders_dir = data_dir / "orders"
+        backup_dir = data_dir / "backup"
 
         paths = ProjectPaths(
             root_dir=root_dir,
@@ -144,6 +147,7 @@ class InboxSyncTestCase(unittest.TestCase):
             inbox_dir=inbox_dir,
             products_dir=products_dir,
             orders_dir=orders_dir,
+            backup_dir=backup_dir,
             output_dir=output_dir,
             warehouse_dir=warehouse_dir,
             sql_dir=sql_dir,

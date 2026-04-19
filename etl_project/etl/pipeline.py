@@ -13,7 +13,13 @@ from __future__ import annotations
 
 from etl_project.config import ProjectPaths, build_paths, read_postgres_dsn
 from etl_project.etl.extract import validate_sources
-from etl_project.etl.load import ensure_directories, export_summary, load_raw_tables, open_connection
+from etl_project.etl.load import (
+    ensure_directories,
+    export_layer_backups,
+    export_summary,
+    load_raw_tables,
+    open_connection,
+)
 from etl_project.etl.postgres_loader import publish_to_postgres
 from etl_project.etl.quality import raise_for_failed_quality_checks, run_quality_checks, write_quality_report
 from etl_project.etl.transform import run_transformations
@@ -31,6 +37,7 @@ def run_pipeline(
     默认行为：
     - 使用 DuckDB 完成本地 ETL
     - 导出一份 mart 汇总 CSV
+    - 将 raw / stg / dw / mart 各层表备份为 ``data/backup/<layer>/*.csv``
 
     可选行为：
     - 把 DuckDB 中已经构建好的分层结果发布到 PostgreSQL / Supabase
@@ -49,6 +56,7 @@ def run_pipeline(
     published_tables: list[str] = []
     quality_report = None
     inserted_order_rows = 0
+    layer_backup_paths: list[str] = []
 
     connection = open_connection(resolved_paths.database_file)
     try:
@@ -91,6 +99,9 @@ def run_pipeline(
         if resolved_options.export_summary:
             export_summary(connection, resolved_paths)
 
+        if resolved_options.export_layer_backups:
+            layer_backup_paths = export_layer_backups(connection, resolved_paths)
+
         if resolved_options.target == "postgres":
             postgres_dsn = resolved_options.postgres_dsn or read_postgres_dsn()
             published_tables = publish_to_postgres(connection, postgres_dsn)
@@ -103,6 +114,7 @@ def run_pipeline(
         export_path=str(resolved_paths.export_file),
         loaded_sources=loaded_sources,
         published_tables=published_tables,
+        layer_backup_paths=layer_backup_paths,
         quality_report=quality_report,
         quality_report_path=str(resolved_paths.quality_report_file),
         incremental_load=resolved_options.incremental_load,

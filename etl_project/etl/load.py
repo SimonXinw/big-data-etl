@@ -4,6 +4,7 @@
 1. 创建 DuckDB 连接
 2. 把原始 CSV 读取到 raw 表
 3. 导出最终结果到文件
+4. 将各分层表备份为 CSV（见 ``export_layer_backups``）
 """
 
 from __future__ import annotations
@@ -14,6 +15,19 @@ import duckdb
 
 from etl_project.config import ProjectPaths
 
+# DuckDB 表名 → 归档子目录（与 PostgreSQL 数仓分层一致：raw / stg / dw / mart）
+_LAYER_BACKUP_TABLES: dict[str, tuple[str, ...]] = {
+    "raw": ("raw_customers", "raw_orders", "raw_shopify_orders"),
+    "stg": ("stg_customers", "stg_orders"),
+    "dw": ("dim_customers", "fact_orders"),
+    "mart": (
+        "mart_sales_summary",
+        "mart_daily_sales",
+        "mart_city_sales",
+        "mart_customer_level_sales",
+    ),
+}
+
 
 def ensure_directories(paths: ProjectPaths) -> None:
     """确保运行过程中需要的目录存在。"""
@@ -22,6 +36,7 @@ def ensure_directories(paths: ProjectPaths) -> None:
     paths.inbox_dir.mkdir(parents=True, exist_ok=True)
     paths.products_dir.mkdir(parents=True, exist_ok=True)
     paths.orders_dir.mkdir(parents=True, exist_ok=True)
+    paths.backup_dir.mkdir(parents=True, exist_ok=True)
     paths.output_dir.mkdir(parents=True, exist_ok=True)
     paths.warehouse_dir.mkdir(parents=True, exist_ok=True)
 
@@ -172,3 +187,29 @@ def export_summary(connection: duckdb.DuckDBPyConnection, paths: ProjectPaths) -
         WITH (HEADER, DELIMITER ',')
         """
     )
+
+
+def export_layer_backups(connection: duckdb.DuckDBPyConnection, paths: ProjectPaths) -> list[str]:
+    """将 DuckDB 中各分层结果导出为 ``data/backup/<layer>/<table>.csv``。
+
+    若某表不存在（例如未走 Shopify 则没有 ``raw_shopify_orders``），则跳过该表。
+    """
+
+    written: list[str] = []
+    for layer, tables in _LAYER_BACKUP_TABLES.items():
+        layer_dir = paths.backup_dir / layer
+        layer_dir.mkdir(parents=True, exist_ok=True)
+        for table in tables:
+            if not _table_exists(connection, table):
+                continue
+            dest = layer_dir / f"{table}.csv"
+            path_literal = dest.as_posix().replace("'", "''")
+            connection.execute(
+                f"""
+                COPY (SELECT * FROM {table})
+                TO '{path_literal}'
+                WITH (HEADER, DELIMITER ',')
+                """
+            )
+            written.append(str(dest))
+    return written

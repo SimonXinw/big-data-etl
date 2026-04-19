@@ -20,6 +20,7 @@ class ProjectPaths:
     - `inbox/`：本地中转 JSON/CSV；
     - `products/`：Storefront 等导出的商品 JSON；
     - `orders/`：Admin 订单宽表快照等导出 JSON；
+    - `backup/`：ETL 完成后按分层（raw/stg/dw/mart）导出的 CSV 备份；
     - `output/`、`warehouse/`：分析产物与 DuckDB 文件。
     """
 
@@ -29,6 +30,7 @@ class ProjectPaths:
     inbox_dir: Path
     products_dir: Path
     orders_dir: Path
+    backup_dir: Path
     output_dir: Path
     warehouse_dir: Path
     sql_dir: Path
@@ -55,6 +57,7 @@ def build_paths() -> ProjectPaths:
     inbox_dir = data_dir / "inbox"
     products_dir = data_dir / "products"
     orders_dir = data_dir / "orders"
+    backup_dir = data_dir / "backup"
     output_dir = data_dir / "output"
     warehouse_dir = data_dir / "warehouse"
     sql_dir = root_dir / "sql"
@@ -68,6 +71,7 @@ def build_paths() -> ProjectPaths:
         inbox_dir=inbox_dir,
         products_dir=products_dir,
         orders_dir=orders_dir,
+        backup_dir=backup_dir,
         output_dir=output_dir,
         warehouse_dir=warehouse_dir,
         sql_dir=sql_dir,
