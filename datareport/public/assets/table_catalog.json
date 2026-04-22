@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "description": "与 etl_project.etl.postgres_loader.PUBLISH_PLANS 目标表一致，供报表下拉与后端白名单校验。",
+  "layers": [
+    {
+      "id": "raw",
+      "label": "原始层 raw",
+      "description": "最接近源系统的保留层",
+      "tables": [
+        {
+          "schema": "raw",
+          "name": "big_data_etl_customers_raw",
+          "label": "客户原始",
+          "chart": "none"
+        },
+        {
+          "schema": "raw",
+          "name": "big_data_etl_orders_raw",
+          "label": "订单原始",
+          "chart": "none"
+        }
+      ]
+    },
+    {
+      "id": "stg",
+      "label": "清洗层 stg",
+      "description": "规范化与清洗后的明细",
+      "tables": [
+        {
+          "schema": "stg",
+          "name": "big_data_etl_customers_clean",
+          "label": "客户清洗",
+          "chart": "none"
+        },
+        {
+          "schema": "stg",
+          "name": "big_data_etl_orders_clean",
+          "label": "订单清洗",
+          "chart": "none"
+        }
+      ]
+    },
+    {
+      "id": "dw",
+      "label": "明细层 dw",
+      "description": "维度与事实表",
+      "tables": [
+        {
+          "schema": "dw",
+          "name": "big_data_etl_dim_customers",
+          "label": "客户维表",
+          "chart": "none"
+        },
+        {
+          "schema": "dw",
+          "name": "big_data_etl_fact_orders",
+          "label": "订单事实",
+          "chart": "none"
+        }
+      ]
+    },
+    {
+      "id": "mart",
+      "label": "汇总层 mart",
+      "description": "面向分析的聚合结果",
+      "tables": [
+        {
+          "schema": "mart",
+          "name": "big_data_etl_sales_summary",
+          "label": "销售汇总多维",
+          "chart": "bar",
+          "chartConfig": {
+            "labelColumn": "summary_key",
+            "valueColumn": "net_sales"
+          },
+          "kpis": [
+            { "column": "order_count", "label": "订单数合计", "agg": "sum", "tone": "accent" },
+            { "column": "gross_sales", "label": "销售总额合计", "agg": "sum", "tone": "soft" },
+            { "column": "net_sales", "label": "净销售额合计", "agg": "sum", "tone": "accent" },
+            { "column": "avg_order_amount", "label": "客单价（平均）", "agg": "avg", "tone": "soft" }
+          ]
+        },
+        {
+          "schema": "mart",
+          "name": "big_data_etl_daily_sales",
+          "label": "按日销售",
+          "chart": "line",
+          "chartConfig": {
+            "labelColumn": "order_date",
+            "valueColumn": "net_sales"
+          },
+          "kpis": [
+            { "column": "order_count", "label": "订单数合计", "agg": "sum", "tone": "accent" },
+            { "column": "customer_count", "label": "客户人次合计", "agg": "sum", "tone": "soft" },
+            { "column": "gross_merchandise_value", "label": "GMV 合计", "agg": "sum", "tone": "accent" },
+            { "column": "net_sales", "label": "净销售额合计", "agg": "sum", "tone": "accent" },
+            { "column": "average_order_value", "label": "平均客单价", "agg": "avg", "tone": "soft" }
+          ]
+        },
+        {
+          "schema": "mart",
+          "name": "big_data_etl_city_sales",
+          "label": "城市销售",
+          "chart": "bar",
+          "chartConfig": {
+            "labelColumn": "city",
+            "valueColumn": "net_sales"
+          },
+          "kpis": [
+            { "column": "order_count", "label": "订单数合计", "agg": "sum", "tone": "accent" },
+            { "column": "customer_count", "label": "客户人次合计", "agg": "sum", "tone": "soft" },
+            { "column": "net_sales", "label": "净销售额合计", "agg": "sum", "tone": "accent" },
+            { "column": "average_order_value", "label": "平均客单价", "agg": "avg", "tone": "soft" }
+          ]
+        },
+        {
+          "schema": "mart",
+          "name": "big_data_etl_customer_level_sales",
+          "label": "客户等级销售",
+          "chart": "bar",
+          "chartConfig": {
+            "labelColumn": "customer_level",
+            "valueColumn": "net_sales"
+          },
+          "kpis": [
+            { "column": "order_count", "label": "订单数合计", "agg": "sum", "tone": "accent" },
+            { "column": "customer_count", "label": "客户人次合计", "agg": "sum", "tone": "soft" },
+            { "column": "net_sales", "label": "净销售额合计", "agg": "sum", "tone": "accent" },
+            { "column": "average_order_value", "label": "平均客单价", "agg": "avg", "tone": "soft" }
+          ]
+        }
+      ]
+    }
+  ]
+}

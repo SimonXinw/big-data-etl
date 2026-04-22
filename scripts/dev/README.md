@@ -14,7 +14,8 @@
 | （手动）Storefront 商品 JSON | `python -m etl_project --export-storefront-products-json` → `data/products/storefront_products.json` |
 | `run_etl_shopify_dev.ps1` | Shopify 拉数 → raw → DuckDB（需 `.env` 里 Shopify 变量） |
 | `run_publish_postgres_dev.ps1` | ETL 并发布到 Postgres；可选参数 `-Source inbox` / `shopify` |
-| `run_metabase_dev.ps1` | `bi/metabase` 下 `docker compose up -d` |
+| `serve_datareport.ps1` | 启动 **`datareport`**：`python datareport/serve.py`（默认 `http://127.0.0.1:8787/`） |
+| `run_metabase_dev.ps1` | 若仓库中存在 **`bi/metabase`**：`docker compose up -d`；否则请按 **`docs/bi-guide.md`** 自行部署 Metabase |
 
 最短演示（装依赖 + 默认 CSV→DuckDB）：先 `install_deps_dev.ps1`，再 `run_etl_csv_dev.ps1`。
 

@@ -48,7 +48,7 @@
 
 ### `sql/postgres/`
 
-存放 **标准 PostgreSQL** 的初始化 SQL（`CREATE SCHEMA` / `CREATE TABLE IF NOT EXISTS` 等）。
+存放 **标准 PostgreSQL** 的初始化 SQL（`CREATE SCHEMA` / `CREATE TABLE IF NOT EXISTS` 等）。同目录另有 **`supabase_grants_for_datareport.sql`**：对 `anon` / `authenticated` 授予分层表 `SELECT` 与宽松 RLS（供 **datareport** 经 PostgREST 读数；需与 Dashboard「Exposed schemas」一并配置）。
 
 这里刻意不单独建 `supabase/` 目录，原因是：
 
@@ -65,9 +65,13 @@
 
 存放 BI 相关骨架配置，目前提供 Metabase 的本地启动样例。
 
+### `datareport/`
+
+**可选**的本机分层数据预览：静态 HTML（拆分 ES Module + CSS）+ `serve.py` 同源提供只读 `/api/*`。若配置了 **`SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY`（或 `SUPABASE_ANON_KEY`）**，默认经 **PostgREST（HTTPS）** 拉数（`/api/supabase-rows`），绕开部分环境下直连 Postgres `5432` 失败；否则回退 **`ETL_POSTGRES_DSN`** 的 `SELECT`。表清单与 `postgres_loader.PUBLISH_PLANS` 对齐（见 `public/assets/table_catalog.json`）；Supabase 权限示例见 **`sql/postgres/supabase_grants_for_datareport.sql`**（与 `init_warehouse.sql` 同目录）。说明见 **`datareport/README.md`**。
+
 ### `docs/`
 
-存放项目说明文档，帮助理解结构和演进方向。
+存放项目说明文档，帮助理解结构和演进方向。常用入口：**`local-full-runbook.md`**（按步骤点命令/SQL）、**`local-etl-quickstart.md`**（仅本地 DuckDB）；与命令表并列的还有根目录 **`README.md`** 的 **「命令速查：拉数 → 落库 → 报表」**。
 
 ## `etl_project/` 内部模块说明
 

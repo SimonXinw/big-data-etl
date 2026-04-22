@@ -42,6 +42,10 @@ big-data-etl/
 │  └─ dataease/
 │     ├─ README.md                 # DataEase：默认账号、MariaDB 说明、启停命令
 │     └─ docker-compose.yml        # DataEase + 内置 MariaDB（BI 前端）
+├─ datareport/
+│  ├─ README.md                    # 分层报表：Supabase REST / Postgres、启动与前置 SQL
+│  ├─ serve.py                     # 静态页 + 只读 /api（读 SUPABASE_* 与/或 ETL_POSTGRES_DSN）
+│  └─ public/                      # index.html、拆分 css/js、table_catalog.json
 ├─ data/
 │  ├─ README.md                    # data 子目录约定说明
 │  ├─ inbox/                       # 本地中转：json/csv → 物化为 raw
@@ -52,6 +56,8 @@ big-data-etl/
 │  └─ warehouse/                   # DuckDB 数据文件
 ├─ docs/
 │  ├─ bi-guide.md                  # BI 选型与接入说明
+│  ├─ local-full-runbook.md        # 本地全流程：SQL、ETL、Postgres、datareport、可选 BI
+│  ├─ local-etl-quickstart.md      # 仅本地 DuckDB ETL 快速上手
 │  └─ project-structure.md         # 模块职责说明
 ├─ lib/
 │  └─ shopify/                     # Shopify Admin GraphQL 只读客户端与 query 定义
@@ -75,7 +81,8 @@ big-data-etl/
 │  └─ sync_chains.py               # 常用链路封装（inbox→DuckDB / inbox→Supabase 等）
 ├─ sql/
 │  └─ postgres/
-│     └─ init_warehouse.sql        # PostgreSQL / Supabase 初始化脚本
+│     ├─ init_warehouse.sql                    # PostgreSQL / Supabase 初始化 DDL
+│     └─ supabase_grants_for_datareport.sql  # Supabase PostgREST：anon 读分层表（datareport）
 ├─ tests/
 │  ├─ test_pipeline.py             # Python 自测
 │  ├─ test_shopify_sync.py         # Shopify 同步相关自测
@@ -266,6 +273,24 @@ python -m etl_project --source inbox --target duckdb
 python -m unittest discover -s tests -v
 ```
 
+## 命令速查：拉数 → 落库 → 报表
+
+统一入口均为项目根目录下的 **`python -m etl_project`**（或 `scripts/dev` 里同名场景的 `*_dev.ps1`）。**拉数**由 `--source` 决定原料；**落库**由 `--target` 决定只写本地 DuckDB 还是再发布到 Postgres。
+
+| 场景 | 命令 | 数据落在哪 |
+|------|------|------------|
+| **本地拉数，只存本地（DuckDB）** | `python -m etl_project --source csv --target duckdb` | `data/warehouse/etl_learning.duckdb`，导出 `data/output/*` |
+| **inbox 中转 → 本地** | `python -m etl_project --source inbox --target duckdb` | 同上；原料来自 `data/inbox` 物化到 `data/raw` |
+| **Shopify → 本地** | `python -m etl_project --source shopify --target duckdb` | 同上；需 `.env` 中 Shopify Admin 变量 |
+| **本地拉数，存 Postgres / Supabase** | `python -m etl_project --source csv --target postgres` | 远端库表 `raw/stg/dw/mart` 下 `big_data_etl_*`；需已执行 **`sql/postgres/init_warehouse.sql`** 且配置 **`ETL_POSTGRES_DSN`** |
+| **inbox → Postgres** | `python -m etl_project --source inbox --target postgres` | 同上 |
+| **Shopify → Postgres** | `python -m etl_project --source shopify --target postgres` | 同上 |
+| **打开本仓库分层报表（HTML 服务）** | `python datareport/serve.py` | 浏览器访问 **`http://127.0.0.1:8787/`**（默认端口）；Windows 可用 **`.\scripts\dev\serve_datareport.ps1`** |
+
+**报表读数说明**：`datareport` 若配置了 **`SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY`（或 `SUPABASE_ANON_KEY`）**，默认经 **PostgREST（HTTPS）** 拉数；否则回退 **`ETL_POSTGRES_DSN`** 直连。Supabase 需在 Dashboard 暴露 schema，并可选执行 **`sql/postgres/supabase_grants_for_datareport.sql`**。详见 **`datareport/README.md`**。
+
+更细的「点哪些文件 / 命令」清单见 **`docs/local-full-runbook.md`**；Windows 一键脚本说明见 **`scripts/dev/README.md`**。
+
 ## 增量 ETL 怎么用
 
 现在项目支持一个**简单可学的增量模式**。
@@ -333,6 +358,16 @@ python -m etl_project --source inbox --target postgres
 ```
 
 或在代码里：`from etl_project.sync_chains import run_inbox_to_supabase`（等价于上式，便于脚本复用）。
+
+### 4. 本机浏览分层表（datareport，可选）
+
+发布到 Supabase / Postgres 后，可用仓库内 **`datareport/`** 启动**只读** Web 服务（KPI 块 + 明细表 + 可选图表）。**不修改 ETL 逻辑**；与上文「命令速查」中报表一行一致，详见 **`datareport/README.md`**。
+
+```bash
+python datareport/serve.py
+```
+
+Windows 也可：`.\scripts\dev\serve_datareport.ps1`
 
 ## 运行后会得到什么
 

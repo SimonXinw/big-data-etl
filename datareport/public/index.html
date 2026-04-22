@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>big-data-etl · 分层数据报表</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/css/report.css" />
+  </head>
+  <body>
+    <div class="datareport_shell">
+      <header class="datareport_header">
+        <div class="datareport_title_block">
+          <p class="eyebrow">big-data-etl / datareport</p>
+          <h1>分层数据报表</h1>
+          <p class="subtitle">
+            选择分层与表：优先通过 <strong>Supabase PostgREST（HTTPS）</strong> 读取（配置 <code>SUPABASE_URL</code> 与
+            <code>SUPABASE_PUBLISHABLE_KEY</code>），避免本机直连 Postgres <code>5432</code> 被代理劫持；亦可回退到同源
+            Postgres 直连。指标块 + 明细表 + 可选图表，脚本为原生 ES Module。
+          </p>
+        </div>
+        <div class="datareport_badge_row">
+          <span class="badge badge_accent" id="dataPathBadge">数据：检测中…</span>
+          <span class="badge">只读</span>
+          <span class="badge">同源 /api</span>
+        </div>
+      </header>
+
+      <section class="kpi_section" aria-label="关键指标">
+        <div class="kpi_section_head">
+          <h2 class="kpi_section_title">关键指标</h2>
+          <p class="kpi_section_desc">以下为当前表在「本次拉取行数」范围内的汇总；mart 表在目录中配置了更语义化的 KPI。</p>
+        </div>
+        <div class="kpi_grid" id="metricsMount"></div>
+      </section>
+
+      <section class="controls_card" aria-label="筛选与操作">
+        <div class="controls_grid">
+          <div class="field">
+            <label for="layerSelect">分层（schema 语义）</label>
+            <select id="layerSelect"></select>
+          </div>
+          <div class="field">
+            <label for="tableSelect">物理表</label>
+            <select id="tableSelect"></select>
+          </div>
+          <div class="field">
+            <label for="limitInput">最大行数（上限由服务限制）</label>
+            <input id="limitInput" type="number" min="1" max="2000" value="500" />
+          </div>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="btn btn_primary" id="refreshButton">刷新数据</button>
+          <button type="button" class="btn btn_ghost" id="resetButton">重置行数</button>
+          <span class="status_pill" id="statusLine">准备就绪</span>
+        </div>
+      </section>
+
+      <section id="layoutSplit" class="layout_split" aria-label="结果展示">
+        <div class="panel">
+          <div class="panel_header">
+            <h2>数据明细</h2>
+          </div>
+          <div class="panel_body">
+            <div id="tableMount"></div>
+          </div>
+        </div>
+
+        <div class="panel" id="chartCard" hidden>
+          <div class="panel_header">
+            <h2>可视化</h2>
+          </div>
+          <div class="panel_body chart_wrap">
+            <canvas id="chartCanvas" height="260" aria-label="图表画布"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <p class="footer_note">
+        若 Supabase REST 报权限或 schema 未暴露，请在 SQL Editor 执行
+        <code>sql/postgres/supabase_grants_for_datareport.sql</code>，并在 Dashboard → Settings → API 将
+        <code>raw,stg,dw,mart</code> 加入 Exposed schemas。发布数据：<code>python -m etl_project --target postgres</code>。详见
+        <code>datareport/README.md</code>。
+      </p>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="/assets/js/app.js"></script>
+  </body>
+</html>

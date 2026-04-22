@@ -10,6 +10,8 @@
 | 本地 ETL 一步清单（本文） | `docs/local-etl-quickstart.md` |
 | **Shopify 拉数 → 清洗 → BI 端到端** | `docs/shopify-and-bi-pipeline.md` |
 | **本地整套要跑哪些步骤 / 文件** | `docs/local-full-runbook.md` |
+| **命令速查（DuckDB / Postgres / datareport）** | 根目录 `README.md` →「命令速查：拉数 → 落库 → 报表」 |
+| **分层 HTML 报表（datareport）** | `datareport/README.md` |
 | **Windows 下一键 `*_dev` 脚本** | `scripts/dev/README.md` |
 | 模块职责 | `docs/project-structure.md` |
 | **`data/` 目录约定**（raw / products / orders 等） | `data/README.md` |

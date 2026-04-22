@@ -29,15 +29,15 @@
 
 ---
 
-## B. 本地 ETL + PostgreSQL + Metabase（完整「到报表」）
+## B. 本地 ETL + PostgreSQL + 看报表（完整「到报表」）
 
 | 步骤 | 做什么 | 执行什么 |
 |------|--------|----------|
 | B1 | 初始化远端库表结构（**每个库做一次**） | 在 PostgreSQL / Supabase **SQL 客户端**中执行文件 **`sql/postgres/init_warehouse.sql`** 的全文（不是用 Python 跑该文件） |
-| B2 | 配置连接 | 项目根目录 **`.env`**：`ETL_POSTGRES_DSN=...`（见 `.env.example`） |
+| B2 | 配置连接 | 项目根目录 **`.env`**：`ETL_POSTGRES_DSN=...`（发布 ETL 必需，见 `.env.example`） |
 | B3 | 跑 ETL 并发布 | `python -m etl_project --source csv --target postgres`（或 `inbox` / `shopify`）或 `.\scripts\dev\run_publish_postgres_dev.ps1` / `run_publish_postgres_dev.ps1 -Source inbox` |
-| B4 | 启动 Metabase | 终端进入 `bi/metabase`：`docker compose up -d`，或 `.\scripts\dev\run_metabase_dev.ps1` |
-| B5 | 看报表 | 浏览器打开 **`http://localhost:3000`**，在 Metabase 里添加数据库（填与 B2 相同的 Postgres），再按 **`docs/metabase-dashboard-template.md`** 建问题/仪表盘 |
+| B4 | （可选）本仓库自带分层 HTML 报表 | `python datareport/serve.py` 或 `.\scripts\dev\serve_datareport.ps1` → 浏览器 **`http://127.0.0.1:8787/`**。优先在 `.env` 配置 **`SUPABASE_URL` + `SUPABASE_PUBLISHABLE_KEY`** 走 PostgREST；否则用 **`ETL_POSTGRES_DSN`** 直连。Supabase 需在 Dashboard **Exposed schemas** 加入 `raw,stg,dw,mart`，并可选执行 **`sql/postgres/supabase_grants_for_datareport.sql`**。详见 **`datareport/README.md`** |
+| B5 | （可选）Metabase 等 BI | 见 **`docs/bi-guide.md`**、**`docs/metabase-dashboard-template.md`**。若你本地克隆里包含 **`bi/metabase`** 目录，可执行 `.\scripts\dev\run_metabase_dev.ps1` 后访问 **`http://localhost:3000`**；当前仓库默认附带的是 **`bi/dataease/`**（Docker 说明见该目录 `README.md`） |
 
 **说明**：Airflow DAG（`airflow/dags/python_etl_dag.py`）是**调度可选件**；本地手工跑通流程时**不必**启动 Airflow。
 
