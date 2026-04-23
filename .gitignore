@@ -9,3 +9,11 @@ node_modules/
 data/*
 # DataEase 本地运行时数据（MariaDB / 缓存等）
 bi/dataease/de_data/
+
+# Airflow Docker（本地日志、配置、密钥）
+airflow/logs/
+airflow/config/*
+!airflow/config/.gitkeep
+airflow/plugins/*
+!airflow/plugins/.gitkeep
+airflow/.env

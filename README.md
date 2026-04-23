@@ -36,6 +36,9 @@
 ```text
 big-data-etl/
 ├─ airflow/
+│  ├─ docker-compose.yaml          # 本地 Airflow（Docker，见 airflow/README.md）
+│  ├─ Dockerfile                   # 在官方镜像上安装 requirements.txt
+│  ├─ README.md                    # 启停与 ETL_PROJECT_ROOT 说明
 │  └─ dags/
 │     └─ python_etl_dag.py         # Airflow 调度示例
 ├─ bi/
